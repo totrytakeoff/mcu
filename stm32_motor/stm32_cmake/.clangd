@@ -1,0 +1,12 @@
+CompileFlags:
+  Add:
+    - "-std=c++20"
+    - "-ICore/Inc"
+    - "-IDrivers/CMSIS/Device/ST/STM32F1xx/Include"
+    - "-IDrivers/CMSIS/Include"
+    - "-IDrivers/STM32F1xx_HAL_Driver/Inc"
+    - "-IC:/Users/myself/.platformio/packages/framework-stm32cubef1/Drivers/STM32F1xx_HAL_Driver/Inc"
+    - "-IC:/Users/myself/.platformio/packages/framework-stm32cubef1/Drivers/CMSIS/Device/ST/STM32F1xx/Include"
+  Remove:
+    - "-stdlib=libc++"
+
