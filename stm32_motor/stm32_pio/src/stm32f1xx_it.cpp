@@ -7,7 +7,11 @@
  * 本文件包含所有中断服务程序的实现
  */
 
-#include "common.h"
+#include "../include/common.h"
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 /**
  * @brief  不可屏蔽中断处理函数
@@ -99,3 +103,7 @@ void SysTick_Handler(void)
     /* SysTick中断处理：递增系统时钟计数器 */
     HAL_IncTick();
 }
+
+#ifdef __cplusplus
+}
+#endif

@@ -1,5 +1,0 @@
-../Core/Src/adc.c:30:6:MX_ADC1_Init	24	static
-../Core/Src/adc.c:72:6:HAL_ADC_MspInit	48	static
-../Core/Src/adc.c:111:6:HAL_ADC_MspDeInit	16	static
-../Core/Src/adc.c:146:11:Get_Adc	32	static
-../Core/Src/adc.c:164:11:Get_Adc_Average	24	static

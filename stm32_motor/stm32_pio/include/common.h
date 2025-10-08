@@ -10,6 +10,10 @@
 #ifndef COMMON_H
 #define COMMON_H
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #include "stm32f1xx_hal.h"
 
 /* 公共函数声明 */
@@ -27,5 +31,9 @@ void Error_Handler(void);
  * @retval None
  */
 void SystemClock_Config(void);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* COMMON_H */

@@ -7,6 +7,7 @@ void Motor::init(TIM_HandleTypeDef* htim, uint32_t channel) {
     htim_ = htim;
     channel_ = channel;
     initialized_ = true;
+    __HAL_TIM_SET_COMPARE(htim_, channel_, 1500);
 }
 
 

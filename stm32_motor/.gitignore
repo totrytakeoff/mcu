@@ -6,3 +6,6 @@
 
 **/.cache/
 **/cache/
+
+**/Debug/
+**/Release/

@@ -1,2 +1,0 @@
-../Core/Src/colour_GY33.c:19:6:colour_GY33_init	24	static
-../Core/Src/colour_GY33.c:59:6:HAL_UART_RxCpltCallback	24	static
