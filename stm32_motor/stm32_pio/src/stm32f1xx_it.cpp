@@ -8,10 +8,14 @@
  */
 
 #include "../include/common.h"
+#include "../include/usart.h"
 
 #ifdef __cplusplus
 extern "C" {
 #endif
+
+/* 外部UART句柄 */
+extern UART_HandleTypeDef huart1;
 
 /**
  * @brief  不可屏蔽中断处理函数
@@ -102,6 +106,16 @@ void SysTick_Handler(void)
 {
     /* SysTick中断处理：递增系统时钟计数器 */
     HAL_IncTick();
+}
+
+/**
+ * @brief  USART1中断处理函数
+ * @retval None
+ */
+void USART1_IRQHandler(void)
+{
+    /* USART1中断处理：调用HAL库处理函数 */
+    HAL_UART_IRQHandler(&huart1);
 }
 
 #ifdef __cplusplus
