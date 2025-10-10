@@ -16,6 +16,7 @@ extern "C" {
 
 /* 外部UART句柄 */
 extern UART_HandleTypeDef huart1;
+extern UART_HandleTypeDef huart2;
 
 /**
  * @brief  不可屏蔽中断处理函数
@@ -116,6 +117,16 @@ void USART1_IRQHandler(void)
 {
     /* USART1中断处理：调用HAL库处理函数 */
     HAL_UART_IRQHandler(&huart1);
+}
+
+/**
+ * @brief  USART2中断处理函数
+ * @retval None
+ */
+void USART2_IRQHandler(void)
+{
+    /* USART2中断处理：调用HAL库处理函数 */
+    HAL_UART_IRQHandler(&huart2);
 }
 
 #ifdef __cplusplus

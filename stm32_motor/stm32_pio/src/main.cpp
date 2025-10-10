@@ -1,20 +1,57 @@
 /**
  * @file    main.cpp
- * @brief   STM32 Motor Control Project - Main Program
- * @author  Migrated from stm32_cmake project
+ * @brief   遥控小车主程序
+ * @author  AI Assistant
  * @date    2024
  * 
- * Motor control application using 4 DC motors controlled via PWM
- * - Motor 1 & 3: Same direction (forward/backward)
- * - Motor 2 & 4: Opposite direction (for robot chassis)
+ * 功能说明：
+ * 通过 TLE100 遥控器控制 4 轮差速小车
+ * - F: 前进
+ * - B: 后退
+ * - L: 左转
+ * - R: 右转
+ * - U: 前进+右转
+ * - D: 后退+右转
+ * - W: 前进+左转
+ * - X: 后退+左转
+ * - 超时自动停止（500ms）
  */
 
 #include "stm32f1xx_hal.h"
 #include "../include/common.h"
 #include "../include/gpio.h"
 #include "../include/tim.h"
+#include "../include/usart.h"
 #include "../include/motor.hpp"
 #include "../include/drive_train.hpp"
+#include "../include/e49_wireless.hpp"
+#include "../include/remote_control.hpp"
+
+/* ========== 全局变量 ========== */
+// E49 对象（全局，方便中断访问）
+E49_Wireless* g_e49 = nullptr;
+
+// UART 接收缓冲
+uint8_t rxBuffer;
+
+/**
+ * @brief UART 接收完成回调函数（HAL库调用）
+ * @param huart UART句柄
+ */
+extern "C" void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
+{
+    if (huart->Instance == USART1)
+    {
+        // 将接收到的数据传递给 E49 对象
+        if (g_e49 != nullptr)
+        {
+            g_e49->onDataReceived(rxBuffer);
+        }
+        
+        // 重新启动接收（单字节循环接收）
+        HAL_UART_Receive_IT(&huart1, &rxBuffer, 1);
+    }
+}
 
 /**
  * @brief  The application entry point
@@ -22,64 +59,81 @@
  */
 extern "C" int main(void)
 {
-    /* HAL Initialization */
+    /* ========== 1. HAL库初始化 ========== */
     HAL_Init();
     
-    /* System Clock Configuration */
+    /* ========== 2. 系统时钟配置 ========== */
     SystemClock_Config();
     
-    /* Initialize all configured peripherals */
+    /* ========== 3. GPIO初始化 ========== */
     MX_GPIO_Init();
+    
+    /* ========== 4. 定时器初始化（PWM） ========== */
     MX_TIM3_Init();
     
-    /* Start PWM for all motor channels */
+    /* ========== 5. USART1初始化（E49通信） ========== */
+    MX_USART1_UART_Init();
+    
+    /* ========== 6. 启动所有 PWM 通道 ========== */
     HAL_TIM_PWM_Start(&htim3, TIM_CHANNEL_1);
     HAL_TIM_PWM_Start(&htim3, TIM_CHANNEL_2);
     HAL_TIM_PWM_Start(&htim3, TIM_CHANNEL_3);
     HAL_TIM_PWM_Start(&htim3, TIM_CHANNEL_4);
     
-    /* Initialize Motor Objects */
-    Motor motor1;
-    Motor motor2;
-    Motor motor3;
-    Motor motor4;
+    /* ========== 7. 初始化 4 个电机 ========== */
+    Motor motor1, motor2, motor3, motor4;
     
     motor1.init(&htim3, TIM_CHANNEL_1);
-    motor3.init(&htim3, TIM_CHANNEL_3);
     motor2.init(&htim3, TIM_CHANNEL_2);
+    motor3.init(&htim3, TIM_CHANNEL_3);
     motor4.init(&htim3, TIM_CHANNEL_4);
     
+    /* ========== 8. 初始化差速转向系统 ========== */
+    // Motor 1 & 3: 左侧
+    // Motor 2 & 4: 右侧
     DriveTrain driveTrain(motor1, motor3, motor2, motor4);
-    /* Note: Motor 1 & 3 rotate in same direction
-     *       Motor 2 & 4 rotate in same direction (opposite to 1 & 3)
-     */
     
-
-    HAL_Delay(1000);
-
-    /* Infinite loop */
+    /* ========== 9. 初始化 E49 无线模块 ========== */
+    E49_Wireless e49;
+    e49.init();
+    g_e49 = &e49;  // 保存到全局指针
+    
+    /* ========== 10. 初始化遥控器控制 ========== */
+    RemoteControl remoteControl(driveTrain, e49);
+    remoteControl.init();
+    
+    // 自定义参数（累积加速逻辑）
+    remoteControl.setBaseSpeed(30);          // 基础速度 30%（最低速度）
+    remoteControl.setMaxSpeed(100);          // 最高速度 100%（最高限制）
+    remoteControl.setSpeedIncrement(10);     // 速度增量 10%（每次指令增加）
+    remoteControl.setTurnSensitivity(40);    // 转向灵敏度 40%
+    remoteControl.setTimeout(1000);          // 超时 1000ms（匹配遥控器间隔）
+    
+    // 配置梯形速度轮廓参数（平滑加减速）
+    driveTrain.setAcceleration(
+        5,   // 加速度：平滑启动
+        8,   // 减速度：平滑停止
+        12   // 反向减速度：快速反向切换
+    );
+    
+    /* ========== 11. 启动 UART 中断接收 ========== */
+    HAL_UART_Receive_IT(&huart1, &rxBuffer, 1);
+    
+    /* ========== 12. 等待系统就绪 ========== */
+    HAL_Delay(500);
+    
+    
+    /* ==================== 主循环 ==================== */
     while (1)
     {
-        // driveTrain.drive(50, 20);  // Move forward with slight left turn
-        // HAL_Delay(2000);
+        // 更新梯形速度轮廓（平滑加减速）
+        driveTrain.update();
         
-        driveTrain.drive(0, 50);   // Rotate in place to the left
-        HAL_Delay(2000);
-        driveTrain.stop();          // Stop all motors
-        HAL_Delay(1000);
+        // 更新遥控器控制（检查超时）
+        remoteControl.update();
         
-        driveTrain.drive(0, 80);   // Rotate in place to the left
-        HAL_Delay(2000);
-        driveTrain.stop();
-        HAL_Delay(1000);
-
-        driveTrain.drive(0,100);
-        HAL_Delay(2000);
-        driveTrain.stop();
-        HAL_Delay(1000);
-
-
-        HAL_Delay(2000);
+        // 短暂延时
+        HAL_Delay(10);
     }
 }
 
