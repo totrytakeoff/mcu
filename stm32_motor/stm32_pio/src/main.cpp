@@ -103,17 +103,17 @@ extern "C" int main(void)
     remoteControl.init();
     
     // 自定义参数（累积加速逻辑）
-    remoteControl.setBaseSpeed(30);          // 基础速度 30%（最低速度）
-    remoteControl.setMaxSpeed(100);          // 最高速度 100%（最高限制）
-    remoteControl.setSpeedIncrement(10);     // 速度增量 10%（每次指令增加）
-    remoteControl.setTurnSensitivity(40);    // 转向灵敏度 40%
-    remoteControl.setTimeout(1000);          // 超时 1000ms（匹配遥控器间隔）
+    remoteControl.setBaseSpeed(25);          // 基础速度 25%（最低速度，降低起步速度）
+    remoteControl.setMaxSpeed(80);           // 最高速度 80%（降低最高限制，更安全）
+    remoteControl.setSpeedIncrement(3);      // 速度增量 3%（降低加速灵敏度：10%→3%）
+    remoteControl.setTurnSensitivity(35);    // 转向灵敏度 35%（降低转向激进程度）
+    remoteControl.setTimeout(150);           // 超时 150ms（快速响应松开：1000ms→150ms）
     
     // 配置梯形速度轮廓参数（平滑加减速）
     driveTrain.setAcceleration(
-        5,   // 加速度：平滑启动
-        8,   // 减速度：平滑停止
-        12   // 反向减速度：快速反向切换
+        8,   // 加速度：提升启动响应（5→8）
+        15,  // 减速度：提升刹车响应（8→15）
+        20   // 反向减速度：快速反向切换（12→20）
     );
     
     /* ========== 11. 启动 UART 中断接收 ========== */

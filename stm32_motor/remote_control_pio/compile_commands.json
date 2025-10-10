@@ -1,0 +1,20 @@
+[
+    {
+        "command": "C:\\Users\\myself\\.platformio\\packages\\toolchain-sdcc\\bin\\sdcc.exe -o .pio\\build\\STC89C52\\src\\keys.rel -c --std-sdcc11 --opt-code-size --peep-return -mmcs51 -DF_CPU=11059200L -DHEAP_SIZE=128 -DPLATFORMIO=60118 -DSTC89C5XRX -DSTC89C52RC -DNAKED_ARCH_MCS51 -DNAKED_MCS51_STC89C5XRX -DFOSC=11059200UL -Iinclude -Isrc src\\keys.c",
+        "directory": "D:\\dev\\code\\mcu\\stm32_motor\\remote_control_pio",
+        "file": "src\\keys.c",
+        "output": ".pio\\build\\STC89C52\\src\\keys.rel"
+    },
+    {
+        "command": "C:\\Users\\myself\\.platformio\\packages\\toolchain-sdcc\\bin\\sdcc.exe -o .pio\\build\\STC89C52\\src\\main.rel -c --std-sdcc11 --opt-code-size --peep-return -mmcs51 -DF_CPU=11059200L -DHEAP_SIZE=128 -DPLATFORMIO=60118 -DSTC89C5XRX -DSTC89C52RC -DNAKED_ARCH_MCS51 -DNAKED_MCS51_STC89C5XRX -DFOSC=11059200UL -Iinclude -Isrc src\\main.c",
+        "directory": "D:\\dev\\code\\mcu\\stm32_motor\\remote_control_pio",
+        "file": "src\\main.c",
+        "output": ".pio\\build\\STC89C52\\src\\main.rel"
+    },
+    {
+        "command": "C:\\Users\\myself\\.platformio\\packages\\toolchain-sdcc\\bin\\sdcc.exe -o .pio\\build\\STC89C52\\src\\uart.rel -c --std-sdcc11 --opt-code-size --peep-return -mmcs51 -DF_CPU=11059200L -DHEAP_SIZE=128 -DPLATFORMIO=60118 -DSTC89C5XRX -DSTC89C52RC -DNAKED_ARCH_MCS51 -DNAKED_MCS51_STC89C5XRX -DFOSC=11059200UL -Iinclude -Isrc src\\uart.c",
+        "directory": "D:\\dev\\code\\mcu\\stm32_motor\\remote_control_pio",
+        "file": "src\\uart.c",
+        "output": ".pio\\build\\STC89C52\\src\\uart.rel"
+    }
+]

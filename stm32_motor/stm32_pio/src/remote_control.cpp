@@ -7,6 +7,7 @@
 
 #include "../include/common.h"
 #include "../include/remote_control.hpp"
+#include "../include/gpio.h"
 
 
 // 静态成员初始化
@@ -123,6 +124,30 @@ void RemoteControl::handleCommand(char command) {
     // 检测指令是否改变（方向切换）
     bool commandChanged = (lastCommand_ != command);
     lastCommand_ = command;
+
+    // LED 调试：显示接收到的字符的低4位（用于调试原始数据）
+    // 如果是已知指令，显示对应编码；否则显示 ASCII 低4位
+    uint8_t ledCode = 15; // 默认全亮（未知指令）
+    
+    // 先尝试匹配已知指令
+    switch (command) {
+        case 'F': ledCode = 1; break;  // 0001
+        case 'B': ledCode = 2; break;  // 0010
+        case 'L': ledCode = 3; break;  // 0011
+        case 'R': ledCode = 4; break;  // 0100
+        case 'U': ledCode = 5; break;  // 0101
+        case 'D': ledCode = 6; break;  // 0110
+        case 'W': ledCode = 7; break;  // 0111
+        case 'X': ledCode = 8; break;  // 1000
+        case 'Y': ledCode = 9; break;  // 1001
+        case 'Z': ledCode = 10; break; // 1010
+        default:  
+            // 未知指令：显示 ASCII 码的低4位（用于调试）
+            // 这样可以看到实际接收到的是什么字符
+            ledCode = command & 0x0F;
+            break;
+    }
+    setDebugLED(ledCode);
 
     // 根据指令执行动作（累积加速逻辑）
     switch (command) {
@@ -287,4 +312,7 @@ void RemoteControl::stop() {
     // 设置目标速度为0，让梯形速度轮廓平滑减速
     driveTrain_.setTargetSpeed(0, 0);
     isMoving_ = false;
+    
+    // LED 调试：停止状态全灭
+    setDebugLED(0);
 }

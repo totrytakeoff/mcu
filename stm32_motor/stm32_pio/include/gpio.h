@@ -26,6 +26,24 @@ extern "C" {
  */
 void MX_GPIO_Init(void);
 
+/**
+ * @brief 设置 LED 调试显示（4位二进制）
+ * @param value 0-15 的值，用二进制方式显示在 LED 上
+ * 
+ * LED 映射（从低位到高位）：
+ * - Bit 0 (值 & 0x01): PB5
+ * - Bit 1 (值 & 0x02): PB12
+ * - Bit 2 (值 & 0x04): PB13
+ * - Bit 3 (值 & 0x08): PB14
+ * 
+ * 示例：
+ * - setDebugLED(0)  -> 0000 (全灭)
+ * - setDebugLED(1)  -> 0001 (PB5 亮)
+ * - setDebugLED(5)  -> 0101 (PB5 + PB13 亮)
+ * - setDebugLED(15) -> 1111 (全亮)
+ */
+void setDebugLED(uint8_t value);
+
 #ifdef __cplusplus
 }
 #endif

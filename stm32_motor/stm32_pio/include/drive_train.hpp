@@ -9,6 +9,7 @@
 #define DRIVE_TRAIN_HPP
 
 #include "../include/motor.hpp"
+#include "../include/motion_profile.hpp"
 
 class DriveTrain {
 public:
@@ -99,26 +100,9 @@ private:
 
     bool initialized_ = false;
 
-    // 目标速度（-100 到 100）
-    int targetStraightSpeed_ = 0;  // 目标直行速度
-    int targetTurnSpeed_ = 0;      // 目标转向速度
-
-    // 当前实际速度（-100 到 100）
-    int currentStraightSpeed_ = 0; // 当前直行速度
-    int currentTurnSpeed_ = 0;     // 当前转向速度
-
-    // 梯形速度轮廓参数
-    int acceleration_ = 5;          // 加速度（每次更新增加的速度）
-    int deceleration_ = 8;          // 减速度（每次更新减少的速度）
-    int reverseDeceleration_ = 12; // 反向减速度（反向切换时）
-
-    // 时间控制
-    uint32_t lastUpdateTime_ = 0;  // 上次更新时间（毫秒）
-    uint32_t updateInterval_ = 20; // 更新间隔（毫秒，默认20ms = 50Hz）
-
-    // 旧版兼容（已弃用）
-    int straightSpeed_ = 0;
-    int turnSpeed_ = 0;
+    // 速度剖面（直行与转向）
+    MotionProfile motionStraight_;
+    MotionProfile motionTurn_;
 
     /**
      * @brief 应用死区滤波消除噪声
@@ -141,14 +125,6 @@ private:
      * @param rightSpeed 右侧速度（会被修改）
      */
     void normalizeSpeed(int& leftSpeed, int& rightSpeed);
-
-    /**
-     * @brief 更新单个速度分量（梯形速度轮廓核心算法）
-     * @param current 当前速度
-     * @param target 目标速度
-     * @return 更新后的速度
-     */
-    int updateSpeedComponent(int current, int target);
 
     /**
      * @brief 将当前速度应用到电机

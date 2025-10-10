@@ -6,7 +6,7 @@
  * 
  * 实现的差速转向算法包含：
  * - Arcade混合算法（直行 + 转向）
- * - 梯形速度轮廓（平滑加减速）
+ * - 梯形速度轮廓（由 MotionProfile 管理）
  * - 速度归一化防止溢出
  * - 死区滤波提高稳定性
  * - 反向刹车（施加反向加速度）
@@ -116,61 +116,8 @@ void DriveTrain::drive(int straightSpeed, int turnSpeed)
     if (!initialized_) {
         return;
     }
-    
-    // 保存当前命令
-    straightSpeed_ = straightSpeed;
-    turnSpeed_ = turnSpeed;
-    
-    // 应用死区滤波
-    int filteredStraight = applyDeadband(straightSpeed, DEADBAND_THRESHOLD);
-    int filteredTurn = applyDeadband(turnSpeed, DEADBAND_THRESHOLD);
-    
-    // 应用转向灵敏度调整
-    int adjustedTurn = static_cast<int>(filteredTurn * TURN_SENSITIVITY);
-    
-    // 检测是否为原地转向（直行速度接近0）
-    bool isSpotTurn = (std::abs(filteredStraight) < 10);
-    
-    // 差速转向混合算法
-    // 左侧: 直行 + 转向 (turnSpeed > 0 时左转)
-    // 右侧: 直行 - 转向
-    int leftSpeed = filteredStraight + adjustedTurn;
-    int rightSpeed = filteredStraight - adjustedTurn;
-    
-    // 原地转向时降低速度，避免堵转和空转
-    if (isSpotTurn && adjustedTurn != 0) {
-        leftSpeed = static_cast<int>(leftSpeed * SPOT_TURN_REDUCTION);
-        rightSpeed = static_cast<int>(rightSpeed * SPOT_TURN_REDUCTION);
-        
-        // 确保速度不会太低导致电机无法启动
-        if (leftSpeed != 0 && std::abs(leftSpeed) < MIN_SPOT_TURN_SPEED) {
-            leftSpeed = (leftSpeed > 0) ? MIN_SPOT_TURN_SPEED : -MIN_SPOT_TURN_SPEED;
-        }
-        if (rightSpeed != 0 && std::abs(rightSpeed) < MIN_SPOT_TURN_SPEED) {
-            rightSpeed = (rightSpeed > 0) ? MIN_SPOT_TURN_SPEED : -MIN_SPOT_TURN_SPEED;
-        }
-    }
-    
-    // 归一化速度以保持比例并在范围内
-    normalizeSpeed(leftSpeed, rightSpeed);
-    
-    // 限幅到绝对限制（安全检查）
-    leftSpeed = clampSpeed(leftSpeed);
-    rightSpeed = clampSpeed(rightSpeed);
-    
-    // 反转方向（修正前后反向问题）
-    leftSpeed = -leftSpeed;
-    rightSpeed = -rightSpeed;
-    
-    // 应用到电机
-    // 左侧电机（正速度 = 前进）
-    leftFrontMotor_.setSpeed(leftSpeed);
-    leftBackMotor_.setSpeed(leftSpeed);
-    
-    // 右侧电机（需要反向，因为电机安装方向相反）
-    // 根据你的 main.cpp，电机2和4前进时需要负值
-    rightFrontMotor_.setSpeed(-rightSpeed);
-    rightBackMotor_.setSpeed(-rightSpeed);
+    // 兼容接口：将命令作为目标速度交由 MotionProfile 平滑执行
+    setTargetSpeed(straightSpeed, turnSpeed);
 }
 
 /**
@@ -187,13 +134,9 @@ void DriveTrain::stop()
     rightFrontMotor_.stop();
     rightBackMotor_.stop();
     
-    // 清零所有速度状态
-    straightSpeed_ = 0;
-    turnSpeed_ = 0;
-    targetStraightSpeed_ = 0;
-    targetTurnSpeed_ = 0;
-    currentStraightSpeed_ = 0;
-    currentTurnSpeed_ = 0;
+    // 清零速度剖面
+    motionStraight_.reset();
+    motionTurn_.reset();
 }
 
 /**
@@ -202,7 +145,7 @@ void DriveTrain::stop()
  */
 int DriveTrain::getStraightSpeed() const
 {
-    return straightSpeed_;
+    return motionStraight_.getTarget();
 }
 
 /**
@@ -211,7 +154,7 @@ int DriveTrain::getStraightSpeed() const
  */
 int DriveTrain::getTurnSpeed() const
 {
-    return turnSpeed_;
+    return motionTurn_.getTarget();
 }
 
 /**
@@ -225,9 +168,9 @@ void DriveTrain::setTargetSpeed(int straightSpeed, int turnSpeed)
         return;
     }
     
-    // 限幅目标速度
-    targetStraightSpeed_ = clampSpeed(straightSpeed);
-    targetTurnSpeed_ = clampSpeed(turnSpeed);
+    // 限幅后设置到速度剖面
+    motionStraight_.setTarget(clampSpeed(straightSpeed));
+    motionTurn_.setTarget(clampSpeed(turnSpeed));
 }
 
 /**
@@ -241,20 +184,10 @@ void DriveTrain::update()
         return;
     }
     
-    // 检查是否到达更新时间
+    // 更新时间片并应用到电机
     uint32_t now = HAL_GetTick();
-    if (now - lastUpdateTime_ < updateInterval_) {
-        return; // 还没到更新时间
-    }
-    lastUpdateTime_ = now;
-    
-    // 更新直行速度分量
-    currentStraightSpeed_ = updateSpeedComponent(currentStraightSpeed_, targetStraightSpeed_);
-    
-    // 更新转向速度分量
-    currentTurnSpeed_ = updateSpeedComponent(currentTurnSpeed_, targetTurnSpeed_);
-    
-    // 将当前速度应用到电机
+    (void)motionStraight_.update(now);
+    (void)motionTurn_.update(now);
     applySpeedToMotors();
 }
 
@@ -270,45 +203,7 @@ void DriveTrain::update()
  * 3. 如果同向但未达到目标，施加加速度
  * 4. 如果超过目标，施加减速度
  */
-int DriveTrain::updateSpeedComponent(int current, int target)
-{
-    // 已到达目标速度
-    if (current == target) {
-        return current;
-    }
-    
-    // 判断是否为反向切换（正→负 或 负→正）
-    bool isReversing = (current > 0 && target < 0) || (current < 0 && target > 0);
-    
-    if (isReversing) {
-        // 反向切换：施加反向加速度（快速刹停）
-        if (current > 0) {
-            // 当前正向，需要减速到0
-            current = std::max(0, current - reverseDeceleration_);
-        } else {
-            // 当前负向，需要加速到0
-            current = std::min(0, current + reverseDeceleration_);
-        }
-    }
-    else if (std::abs(current) < std::abs(target)) {
-        // 加速阶段：当前速度小于目标速度
-        if (target > current) {
-            current = std::min(target, current + acceleration_);
-        } else {
-            current = std::max(target, current - acceleration_);
-        }
-    }
-    else {
-        // 减速阶段：当前速度大于目标速度
-        if (target > current) {
-            current = std::min(target, current + deceleration_);
-        } else {
-            current = std::max(target, current - deceleration_);
-        }
-    }
-    
-    return current;
-}
+// 移除旧的内部梯形实现（由 MotionProfile 管理）
 
 /**
  * @brief 将当前速度应用到电机
@@ -317,9 +212,9 @@ int DriveTrain::updateSpeedComponent(int current, int target)
  */
 void DriveTrain::applySpeedToMotors()
 {
-    // 应用死区滤波
-    int filteredStraight = applyDeadband(currentStraightSpeed_, DEADBAND_THRESHOLD);
-    int filteredTurn = applyDeadband(currentTurnSpeed_, DEADBAND_THRESHOLD);
+    // 从速度剖面读取当前速度并应用死区
+    int filteredStraight = applyDeadband(motionStraight_.getCurrent(), DEADBAND_THRESHOLD);
+    int filteredTurn = applyDeadband(motionTurn_.getCurrent(), DEADBAND_THRESHOLD);
     
     // 应用转向灵敏度调整
     int adjustedTurn = static_cast<int>(filteredTurn * TURN_SENSITIVITY);
@@ -376,9 +271,8 @@ void DriveTrain::applySpeedToMotors()
  */
 void DriveTrain::setAcceleration(int acceleration, int deceleration, int reverseDeceleration)
 {
-    acceleration_ = std::max(1, acceleration);
-    deceleration_ = std::max(1, deceleration);
-    reverseDeceleration_ = std::max(1, reverseDeceleration);
+    motionStraight_.setParams(acceleration, deceleration, reverseDeceleration);
+    motionTurn_.setParams(acceleration, deceleration, reverseDeceleration);
 }
 
 /**
@@ -387,5 +281,6 @@ void DriveTrain::setAcceleration(int acceleration, int deceleration, int reverse
  */
 void DriveTrain::setUpdateInterval(uint32_t intervalMs)
 {
-    updateInterval_ = std::max(static_cast<uint32_t>(10), intervalMs); // 最小10ms
+    motionStraight_.setUpdateInterval(intervalMs);
+    motionTurn_.setUpdateInterval(intervalMs);
 }
