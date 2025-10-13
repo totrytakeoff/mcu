@@ -1,5 +1,7 @@
 .pio
 
+**/.pio/
+
 **/build/
 
 **/dist/

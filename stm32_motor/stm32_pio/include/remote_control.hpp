@@ -87,6 +87,24 @@ public:
      * @return true=运动中, false=停止
      */
     bool isMoving() const;
+    
+    /**
+     * @brief 处理接收到的指令（公开接口，供蓝牙控制调用）
+     * @param command 指令字符
+     */
+    void handleCommand(char command);
+
+    /**
+     * @brief 处理摇杆映射后的模拟速度（直行/转向）
+     * @param straightSpeed 直行速度百分比 (-100..100)
+     * @param turnSpeed 转向速度百分比 (-100..100)
+     * 
+     * 行为：
+     * - 刷新超时计时
+     * - 应用转向灵敏度与最高速度限制
+     * - 通过梯形速度轮廓平滑到目标
+     */
+    void handleJoystickSpeeds(int straightSpeed, int turnSpeed);
 
 private:
     DriveTrain& driveTrain_;        // 差速转向系统引用
@@ -105,12 +123,6 @@ private:
     // 当前目标速度（累积）
     int currentTargetStraightSpeed_;  // 当前目标直行速度
     int currentTargetTurnSpeed_;      // 当前目标转向速度
-    
-    /**
-     * @brief 处理接收到的指令
-     * @param command 指令字符
-     */
-    void handleCommand(char command);
     
     /**
      * @brief 检查并处理超时

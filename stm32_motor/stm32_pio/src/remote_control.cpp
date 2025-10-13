@@ -316,3 +316,22 @@ void RemoteControl::stop() {
     // LED 调试：停止状态全灭
     setDebugLED(0);
 }
+
+void RemoteControl::handleJoystickSpeeds(int straightSpeed, int turnSpeed)
+{
+    // 刷新超时计时，表示有有效输入
+    lastCommandTime_ = HAL_GetTick();
+    isMoving_ = (std::abs(straightSpeed) > 0) || (std::abs(turnSpeed) > 0);
+
+    // 限幅并应用转向灵敏度与最高速度限制
+    int limitedStraight = straightSpeed;
+    if (limitedStraight > maxSpeed_) limitedStraight = maxSpeed_;
+    if (limitedStraight < -maxSpeed_) limitedStraight = -maxSpeed_;
+
+    int limitedTurn = (turnSpeed * turnSensitivity_) / 100;
+    if (limitedTurn > maxSpeed_) limitedTurn = maxSpeed_;
+    if (limitedTurn < -maxSpeed_) limitedTurn = -maxSpeed_;
+
+    // 设置目标速度（梯形速度轮廓会平滑到该目标）
+    driveTrain_.setTargetSpeed(limitedStraight, limitedTurn);
+}

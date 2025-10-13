@@ -28,9 +28,6 @@
 - ✅ 模块化的代码组织
 - ✅ 支持正反转和速度控制 (-100 ~ 100)
 - ✅ 适配 MDA12E11 电机驱动模块
-- ✅ **双源遥控**：E49 无线 + ESP32-S3 蓝牙
-- ✅ **梯形速度轮廓**：平滑加减速控制
-- ✅ **摇杆模式**：360度精确方向控制
 
 ---
 
@@ -43,8 +40,6 @@
 | [INDEX.md](INDEX.md) | 📖 **文档索引 - 快速查找** | 🌟 推荐入口 |
 | [CRITICAL_CPP_LINKAGE_FIX.md](CRITICAL_CPP_LINKAGE_FIX.md) | ⚠️ **C++中断链接问题详解** | 🔥🔥🔥 必读 |
 | [CPP_INTERRUPT_CHECKLIST.md](CPP_INTERRUPT_CHECKLIST.md) | ⚡ 30秒快速检查清单 | 🔥🔥 推荐 |
-| [docs/BLUETOOTH_CONTROL_GUIDE.md](docs/BLUETOOTH_CONTROL_GUIDE.md) | 📱 **蓝牙控制完整指南** | 🔥🔥 推荐 |
-| [docs/LED_DEBUG_GUIDE.md](docs/LED_DEBUG_GUIDE.md) | 💡 LED调试指南 | 🔥 参考 |
 | [UPLOAD_CONFIG.md](UPLOAD_CONFIG.md) | 串口上传完整指南 | 🔥 参考 |
 | [MIGRATION_NOTES.md](MIGRATION_NOTES.md) | CMake→PIO迁移说明 | 🔥 参考 |
 
