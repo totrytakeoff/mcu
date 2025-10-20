@@ -1,189 +1,167 @@
 /**
- * @file    main.cpp
- * @brief   遥控小车主程序
+ * @file    i2c_scan.cpp
+ * @brief   I2C总线设备扫描程序
  * @author  AI Assistant
  * @date    2024
  * 
- * 功能说明：
- * 通过 TLE100 遥控器控制 4 轮差速小车
- * - F: 前进
- * - B: 后退
- * - L: 左转
- * - R: 右转
- * - U: 前进+右转
- * - D: 后退+右转
- * - W: 前进+左转
- * - X: 后退+左转
- * - 超时自动停止（500ms）
+ * 用途：扫描I2C总线上的所有设备，帮助诊断硬件连接问题
  */
-
 
 #include "stm32f1xx_hal.h"
-#include "../include/common.h"
-#include "../include/gpio.h"
-#include "../include/tim.h"
-#include "../include/usart.h"
-#include "../include/motor.hpp"
-#include "../include/drive_train.hpp"
-#include "../include/e49_wireless.hpp"
-#include "../include/remote_control.hpp"
-#include "../include/bluetooth_control.hpp"
+#include "debug.hpp"
+#include "gpio.h"
+#include "tim.h"
+#include "usart.h"
 
-/* ========== 全局变量 ========== */
-// E49 对象（全局，方便中断访问）
-E49_Wireless* g_e49 = nullptr;
+extern "C" {
+void SystemClock_Config(void);
+}
 
-// 蓝牙控制对象（全局，方便中断访问）
-BluetoothControl* g_bluetooth = nullptr;
-
-// UART 接收缓冲
-uint8_t rxBuffer;        // USART1 (E49 无线模块)
-uint8_t rxBuffer2;       // USART2 (ESP32-S3 蓝牙模块)
+/* I2C句柄 */
+I2C_HandleTypeDef hi2c2;
 
 /**
- * @brief UART 接收完成回调函数（HAL库调用）
- * @param huart UART句柄
+ * @brief I2C2初始化
  */
-extern "C" void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
+void MX_I2C2_Init(void)
 {
-    if (huart->Instance == USART1)
-    {
-        // USART1: E49 无线模块数据
-        if (g_e49 != nullptr)
-        {
-            g_e49->onDataReceived(rxBuffer);
-        }
-        
-        // 重新启动接收（单字节循环接收）
-        HAL_UART_Receive_IT(&huart1, &rxBuffer, 1);
-    }
-    else if (huart->Instance == USART2)
-    {
-        // USART2: ESP32-S3 蓝牙模块数据（仅入队，不在中断内解析）
-        if (g_bluetooth != nullptr)
-        {
-            g_bluetooth->enqueueFromISR(rxBuffer2);
-        }
-        // 重新启动接收（单字节循环接收）
-        HAL_UART_Receive_IT(&huart2, &rxBuffer2, 1);
+    hi2c2.Instance = I2C2;
+    hi2c2.Init.ClockSpeed = 100000;
+    hi2c2.Init.DutyCycle = I2C_DUTYCYCLE_2;
+    hi2c2.Init.OwnAddress1 = 0;
+    hi2c2.Init.AddressingMode = I2C_ADDRESSINGMODE_7BIT;
+    hi2c2.Init.DualAddressMode = I2C_DUALADDRESS_DISABLE;
+    hi2c2.Init.OwnAddress2 = 0;
+    hi2c2.Init.GeneralCallMode = I2C_GENERALCALL_DISABLE;
+    hi2c2.Init.NoStretchMode = I2C_NOSTRETCH_DISABLE;
+    
+    if (HAL_I2C_Init(&hi2c2) != HAL_OK) {
+        Debug_Printf("[ERROR] I2C初始化失败\r\n");
     }
 }
 
 /**
- * @brief  The application entry point
- * @retval int
+ * @brief I2C2 MSP初始化
+ */
+void HAL_I2C_MspInit(I2C_HandleTypeDef* hi2c)
+{
+    GPIO_InitTypeDef GPIO_InitStruct = {0};
+    
+    if(hi2c->Instance == I2C2) {
+        __HAL_RCC_GPIOB_CLK_ENABLE();
+        __HAL_RCC_I2C2_CLK_ENABLE();
+        
+        GPIO_InitStruct.Pin = GPIO_PIN_10 | GPIO_PIN_11;
+        GPIO_InitStruct.Mode = GPIO_MODE_AF_OD;
+        GPIO_InitStruct.Pull = GPIO_NOPULL;
+        GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_HIGH;
+        HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
+    }
+}
+
+/**
+ * @brief 扫描I2C总线
+ */
+void I2C_Scan(void)
+{
+    Debug_Printf("\r\n========================================\r\n");
+    Debug_Printf("   I2C总线设备扫描\r\n");
+    Debug_Printf("========================================\r\n");
+    Debug_Printf("正在扫描地址 0x00-0x7F...\r\n\r\n");
+    
+    uint8_t found_count = 0;
+    
+    for (uint8_t addr = 0; addr < 128; addr++) {
+        // 尝试探测设备（7位地址）
+        HAL_StatusTypeDef result = HAL_I2C_IsDeviceReady(&hi2c2, addr << 1, 3, 100);
+        
+        if (result == HAL_OK) {
+            Debug_Printf("[FOUND] 设备地址: 0x%02X\r\n", addr);
+            found_count++;
+            
+            // 识别常见设备
+            if (addr == 0x50) {
+                Debug_Printf("        --> 可能是 24C02/24C04 EEPROM\r\n");
+            } else if (addr >= 0x50 && addr <= 0x57) {
+                Debug_Printf("        --> 可能是 24Cxx EEPROM\r\n");
+            } else if (addr == 0x68) {
+                Debug_Printf("        --> 可能是 MPU6050/DS3231\r\n");
+            } else if (addr == 0x76 || addr == 0x77) {
+                Debug_Printf("        --> 可能是 BMP280/BME280\r\n");
+            }
+        }
+        
+        // 每16个地址打印一个进度点
+        if ((addr + 1) % 16 == 0) {
+            Debug_Printf(".");
+        }
+    }
+    
+    Debug_Printf("\r\n\r\n========================================\r\n");
+    if (found_count > 0) {
+        Debug_Printf("✅ 扫描完成：找到 %d 个I2C设备\r\n", found_count);
+    } else {
+        Debug_Printf("❌ 扫描完成：未找到任何I2C设备\r\n");
+        Debug_Printf("\r\n可能的原因：\r\n");
+        Debug_Printf("  1. 没有连接I2C设备\r\n");
+        Debug_Printf("  2. PB10/PB11连接错误\r\n");
+        Debug_Printf("  3. 缺少上拉电阻（需要4.7kΩ）\r\n");
+        Debug_Printf("  4. I2C设备供电不正常\r\n");
+    }
+    Debug_Printf("========================================\r\n");
+}
+
+/**
+ * @brief 主程序
  */
 extern "C" int main(void)
 {
-    /* ========== 1. HAL库初始化 ========== */
+    /* 1. HAL库初始化 */
     HAL_Init();
-    
-    /* ========== 2. 系统时钟配置 ========== */
     SystemClock_Config();
     
-    /* ========== 3. GPIO初始化 ========== */
+    /* 2. GPIO和串口初始化 */
     MX_GPIO_Init();
-    
-    /* ========== 4. 定时器初始化（PWM） ========== */
-    MX_TIM3_Init();
-    
-    /* ========== 5. USART1初始化（E49通信） ========== */
-    MX_USART1_UART_Init();
-
-    /* ========== 5b. USART2初始化（蓝牙通信） ========== */
     MX_USART2_UART_Init();
+    Debug_Enable();
     
-    /* ========== 6. 启动所有 PWM 通道 ========== */
-    HAL_TIM_PWM_Start(&htim3, TIM_CHANNEL_1);
-    HAL_TIM_PWM_Start(&htim3, TIM_CHANNEL_2);
-    HAL_TIM_PWM_Start(&htim3, TIM_CHANNEL_3);
-    HAL_TIM_PWM_Start(&htim3, TIM_CHANNEL_4);
+    Debug_Printf("\r\n\r\n");
+    Debug_Printf("========================================\r\n");
+    Debug_Printf("   STM32 I2C设备扫描工具\r\n");
+    Debug_Printf("========================================\r\n");
+    Debug_Printf("I2C接口: I2C2\r\n");
+    Debug_Printf("SCL引脚: PB10\r\n");
+    Debug_Printf("SDA引脚: PB11\r\n");
+    Debug_Printf("速率: 100kHz\r\n");
     
-    /* ========== 7. 初始化 4 个电机 ========== */
-    Motor motor1, motor2, motor3, motor4;
+    HAL_Delay(1000);
     
-    motor1.init(&htim3, TIM_CHANNEL_1);
-    motor2.init(&htim3, TIM_CHANNEL_2);
-    motor3.init(&htim3, TIM_CHANNEL_3);
-    motor4.init(&htim3, TIM_CHANNEL_4);
+    /* 3. 初始化I2C */
+    Debug_Printf("\r\n[INIT] 正在初始化I2C2...\r\n");
+    MX_I2C2_Init();
+    Debug_Printf("[OK] I2C2初始化完成\r\n");
     
-    /* ========== 8. 初始化差速转向系统 ========== */
-    // Motor 1 & 3: 左侧
-    // Motor 2 & 4: 右侧
-    DriveTrain driveTrain(motor1, motor3, motor2, motor4);
-    
-    /* ========== 9. 初始化 E49 无线模块 ========== */
-    E49_Wireless e49;
-    e49.init();
-    g_e49 = &e49;  // 保存到全局指针
-    
-    /* ========== 10. 初始化遥控器控制 ========== */
-    RemoteControl remoteControl(driveTrain, e49);
-    remoteControl.init();
-    
-    // 自定义参数（累积加速逻辑）
-    remoteControl.setBaseSpeed(25);          // 基础速度 25%（最低速度，降低起步速度）
-    remoteControl.setMaxSpeed(80);           // 最高速度 80%（降低最高限制，更安全）
-    remoteControl.setSpeedIncrement(3);      // 速度增量 3%（降低加速灵敏度：10%→3%）
-    remoteControl.setTurnSensitivity(35);    // 转向灵敏度 35%（降低转向激进程度）
-    remoteControl.setTimeout(150);           // 超时 150ms（快速响应松开：1000ms→150ms）
-    
-    // 配置梯形速度轮廓参数（平滑加减速）
-    driveTrain.setAcceleration(
-        8,   // 加速度：提升启动响应（5→8）
-        15,  // 减速度：提升刹车响应（8→15）
-        20   // 反向减速度：快速反向切换（12→20）
-    );
-    
-    /* ========== 11. 初始化蓝牙控制 ========== */
-    BluetoothControl bluetoothControl(remoteControl);
-    bluetoothControl.init();
-    bluetoothControl.setJoystickMode(true);  // 启用摇杆模式
-    
-    // 设置全局指针（供UART中断回调使用）
-    g_bluetooth = &bluetoothControl;
-    
-    /* ========== 12. 启动 UART 中断接收 ========== */
-    HAL_UART_Receive_IT(&huart1, &rxBuffer, 1);   // E49 无线模块
-    HAL_UART_Receive_IT(&huart2, &rxBuffer2, 1);  // ESP32-S3 蓝牙模块
-    
-    /* ========== 13. 等待系统就绪 ========== */
     HAL_Delay(500);
     
+    /* 4. 扫描I2C总线 */
+    I2C_Scan();
     
-    /* ==================== 主循环 ==================== */
-    while (1)
-    {
-        // 更新梯形速度轮廓（平滑加减速）
-        driveTrain.update();
-        
-        // 更新遥控器控制（检查超时）
-        remoteControl.update();
-        
-        // 消费蓝牙RX队列并解析指令
-        bluetoothControl.update();
-        
-        // 短暂延时
-        HAL_Delay(10);
+    /* 5. 完成 */
+    Debug_Printf("\r\n提示：如果没有找到设备，请检查硬件连接\r\n");
+    Debug_Printf("提示：24C02的地址通常是 0x50\r\n");
+    
+    while (1) {
+        HAL_Delay(1000);
     }
 }
 
 /**
- * @brief  System Clock Configuration
- * @note   Configures system clock to 72MHz using external 8MHz crystal
- * @retval None
+ * @brief 系统时钟配置
  */
-void SystemClock_Config(void)
-{
+void SystemClock_Config(void) {
     RCC_OscInitTypeDef RCC_OscInitStruct = {0};
     RCC_ClkInitTypeDef RCC_ClkInitStruct = {0};
-    RCC_PeriphCLKInitTypeDef PeriphClkInit = {0};
-    
-    /**
-     * Initializes the RCC Oscillators:
-     * - External HSE: 8MHz
-     * - PLL: 8MHz * 9 = 72MHz
-     */
+
     RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSE;
     RCC_OscInitStruct.HSEState = RCC_HSE_ON;
     RCC_OscInitStruct.HSEPredivValue = RCC_HSE_PREDIV_DIV1;
@@ -191,79 +169,19 @@ void SystemClock_Config(void)
     RCC_OscInitStruct.PLL.PLLState = RCC_PLL_ON;
     RCC_OscInitStruct.PLL.PLLSource = RCC_PLLSOURCE_HSE;
     RCC_OscInitStruct.PLL.PLLMUL = RCC_PLL_MUL9;
-    
+
     if (HAL_RCC_OscConfig(&RCC_OscInitStruct) != HAL_OK) {
-        Error_Handler();
+        while(1);
     }
-    
-    /**
-     * Initializes the CPU, AHB and APB buses clocks:
-     * - SYSCLK: 72MHz
-     * - AHB: 72MHz
-     * - APB1: 36MHz (max for STM32F103)
-     * - APB2: 72MHz
-     */
-    RCC_ClkInitStruct.ClockType = RCC_CLOCKTYPE_HCLK | RCC_CLOCKTYPE_SYSCLK
-                                | RCC_CLOCKTYPE_PCLK1 | RCC_CLOCKTYPE_PCLK2;
+
+    RCC_ClkInitStruct.ClockType = RCC_CLOCKTYPE_HCLK | RCC_CLOCKTYPE_SYSCLK | 
+                                   RCC_CLOCKTYPE_PCLK1 | RCC_CLOCKTYPE_PCLK2;
     RCC_ClkInitStruct.SYSCLKSource = RCC_SYSCLKSOURCE_PLLCLK;
     RCC_ClkInitStruct.AHBCLKDivider = RCC_SYSCLK_DIV1;
     RCC_ClkInitStruct.APB1CLKDivider = RCC_HCLK_DIV2;
     RCC_ClkInitStruct.APB2CLKDivider = RCC_HCLK_DIV1;
-    
+
     if (HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_2) != HAL_OK) {
-        Error_Handler();
-    }
-    
-    /* Peripheral Clock Configuration */
-    PeriphClkInit.PeriphClockSelection = RCC_PERIPHCLK_ADC;
-    PeriphClkInit.AdcClockSelection = RCC_ADCPCLK2_DIV6;
-    if (HAL_RCCEx_PeriphCLKConfig(&PeriphClkInit) != HAL_OK) {
-        Error_Handler();
+        while(1);
     }
 }
-
-/**
- * @brief  Error Handler
- * @note   Called when a HAL function returns an error
- * @retval None
- */
-void Error_Handler(void)
-{
-    /* Disable interrupts */
-    __disable_irq();
-    
-    /* Infinite loop on error */
-    while (1) {
-        // Could add LED blinking or other error indication here
-    }
-}
-
-/**
- * @brief  HAL MSP Initialization
- * @retval None
- */
-void HAL_MspInit(void)
-{
-    __HAL_RCC_AFIO_CLK_ENABLE();
-    __HAL_RCC_PWR_CLK_ENABLE();
-    
-    /* System interrupt init */
-    
-    /** NOJTAG: JTAG-DP Disabled and SW-DP Enabled */
-    __HAL_AFIO_REMAP_SWJ_NOJTAG();
-}
-
-#ifdef USE_FULL_ASSERT
-/**
- * @brief  Reports the name of the source file and the source line number
- *         where the assert_param error has occurred.
- * @param  file: pointer to the source file name
- * @param  line: assert_param error line source number
- * @retval None
- */
-void assert_failed(uint8_t* file, uint32_t line)
-{
-    /* User can add his own implementation to report the file name and line number,
-       ex: printf("Wrong parameters value: file %s on line %d\r\n", file, line) */
-}
-#endif /* USE_FULL_ASSERT */

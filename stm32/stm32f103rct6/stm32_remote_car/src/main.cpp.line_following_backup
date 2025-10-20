@@ -1,0 +1,144 @@
+/**
+ * @file    main.cpp
+ * @brief   简洁PD巡线系统
+ * @author  AI Assistant
+ * @date    2024
+ */
+
+#include "adc.h"
+#include "gpio.h"
+#include "line_sensor.hpp"
+#include "motor.hpp"
+#include "stm32f1xx_hal.h"
+#include "tim.h"
+#include "usart.h"
+
+
+
+/* ========== 全局对象 ========== */
+
+Motor motor1, motor2, motor3, motor4;
+
+
+/* ========== 函数声明 ========== */
+extern "C" {
+void SystemClock_Config(void);
+void Error_Handler(void);
+}
+
+/* ========== 主程序 ========== */
+extern "C" int main(void) {
+    /* ========== 1. HAL库初始化 ========== */
+    HAL_Init();
+
+    /* ========== 2. 系统时钟配置 ========== */
+    SystemClock_Config();
+
+    /* ========== 3. GPIO初始化 ========== */
+    MX_GPIO_Init();
+
+    /* ========== 4. 定时器初始化（PWM） ========== */
+    MX_TIM3_Init();
+
+    /* ========== 5. USART1初始化 ========== */
+    MX_USART1_UART_Init();
+
+    /* ========== 6. ADC初始化（8路灰度传感器） ========== */
+    MX_ADC1_Init();
+
+    /* ========== 7. 启动所有 PWM 通道 ========== */
+    HAL_TIM_PWM_Start(&htim3, TIM_CHANNEL_1);
+    HAL_TIM_PWM_Start(&htim3, TIM_CHANNEL_2);
+    HAL_TIM_PWM_Start(&htim3, TIM_CHANNEL_3);
+    HAL_TIM_PWM_Start(&htim3, TIM_CHANNEL_4);
+
+    /* ========== 8. 初始化 4 个电机 ========== */
+    motor1.init(&htim3, TIM_CHANNEL_1);
+    motor2.init(&htim3, TIM_CHANNEL_2);
+    motor3.init(&htim3, TIM_CHANNEL_3);
+    motor4.init(&htim3, TIM_CHANNEL_4);
+
+
+
+    while (1) {
+       
+    }
+}
+
+/* ========== 系统配置（完全参照main.cpp.back）========== */
+void SystemClock_Config(void) {
+    RCC_OscInitTypeDef RCC_OscInitStruct = {0};
+    RCC_ClkInitTypeDef RCC_ClkInitStruct = {0};
+    RCC_PeriphCLKInitTypeDef PeriphClkInit = {0};
+
+    /**
+     * Initializes the RCC Oscillators:
+     * - External HSE: 8MHz
+     * - PLL: 8MHz * 9 = 72MHz
+     */
+    RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSE;
+    RCC_OscInitStruct.HSEState = RCC_HSE_ON;
+    RCC_OscInitStruct.HSEPredivValue = RCC_HSE_PREDIV_DIV1;
+    RCC_OscInitStruct.HSIState = RCC_HSI_ON;
+    RCC_OscInitStruct.PLL.PLLState = RCC_PLL_ON;
+    RCC_OscInitStruct.PLL.PLLSource = RCC_PLLSOURCE_HSE;
+    RCC_OscInitStruct.PLL.PLLMUL = RCC_PLL_MUL9;
+
+    if (HAL_RCC_OscConfig(&RCC_OscInitStruct) != HAL_OK) {
+        Error_Handler();
+    }
+
+    /**
+     * Initializes the CPU, AHB and APB buses clocks:
+     * - SYSCLK: 72MHz
+     * - AHB: 72MHz
+     * - APB1: 36MHz (max for STM32F103)
+     * - APB2: 72MHz
+     */
+    RCC_ClkInitStruct.ClockType =
+            RCC_CLOCKTYPE_HCLK | RCC_CLOCKTYPE_SYSCLK | RCC_CLOCKTYPE_PCLK1 | RCC_CLOCKTYPE_PCLK2;
+    RCC_ClkInitStruct.SYSCLKSource = RCC_SYSCLKSOURCE_PLLCLK;
+    RCC_ClkInitStruct.AHBCLKDivider = RCC_SYSCLK_DIV1;
+    RCC_ClkInitStruct.APB1CLKDivider = RCC_HCLK_DIV2;
+    RCC_ClkInitStruct.APB2CLKDivider = RCC_HCLK_DIV1;
+
+    if (HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_2) != HAL_OK) {
+        Error_Handler();
+    }
+
+    /* Peripheral Clock Configuration */
+    PeriphClkInit.PeriphClockSelection = RCC_PERIPHCLK_ADC;
+    PeriphClkInit.AdcClockSelection = RCC_ADCPCLK2_DIV6;
+    if (HAL_RCCEx_PeriphCLKConfig(&PeriphClkInit) != HAL_OK) {
+        Error_Handler();
+    }
+}
+
+/**
+ * @brief  Error Handler
+ * @note   Called when a HAL function returns an error
+ * @retval None
+ */
+void Error_Handler(void) {
+    /* Disable interrupts */
+    __disable_irq();
+
+    /* Infinite loop on error */
+    while (1) {
+        // Could add LED blinking or other error indication here
+    }
+}
+
+/**
+ * @brief  HAL MSP Initialization
+ * @retval None
+ */
+void HAL_MspInit(void) {
+    __HAL_RCC_AFIO_CLK_ENABLE();
+    __HAL_RCC_PWR_CLK_ENABLE();
+
+    /* System interrupt init */
+
+    /** NOJTAG: JTAG-DP Disabled and SW-DP Enabled */
+    __HAL_AFIO_REMAP_SWJ_NOJTAG();
+}

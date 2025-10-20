@@ -190,3 +190,33 @@ void USART2_Printf(const char* format, ...)
     
     USART2_Print(buffer);
 }
+
+/**
+ * @brief 通过USART1发送字符串（调试用）
+ * @param str 要发送的字符串
+ */
+void USART1_Print(const char* str)
+{
+    HAL_UART_Transmit(&huart1, (uint8_t*)str, strlen(str), 1000);
+}
+
+/**
+ * @brief 通过USART1发送格式化字符串（类似printf）
+ * @param format 格式化字符串
+ * @param ... 可变参数
+ * 
+ * 使用示例：
+ *   USART1_Printf("巡线误差: %d, 速度: %d%%\r\n", error, speed);
+ *   USART1_Printf("传感器值: %d\r\n", value);
+ */
+void USART1_Printf(const char* format, ...)
+{
+    char buffer[256];  // 缓冲区，根据需要调整大小
+    va_list args;
+    
+    va_start(args, format);
+    vsnprintf(buffer, sizeof(buffer), format, args);
+    va_end(args);
+    
+    USART1_Print(buffer);
+}

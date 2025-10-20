@@ -45,6 +45,19 @@ void USART2_Print(const char* str);
  */
 void USART2_Printf(const char* format, ...);
 
+/**
+ * @brief 通过USART1发送字符串（调试用）
+ * @param str 要发送的字符串
+ */
+void USART1_Print(const char* str);
+
+/**
+ * @brief 通过USART1发送格式化字符串（类似printf）
+ * @param format 格式化字符串
+ * @param ... 可变参数
+ */
+void USART1_Printf(const char* format, ...);
+
 #ifdef __cplusplus
 }
 #endif

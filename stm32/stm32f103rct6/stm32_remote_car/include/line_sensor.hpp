@@ -3,7 +3,7 @@
  * @brief   8路灰度传感器类 - 黑白线检测
  * @author  AI Assistant
  * @date    2024
- * 
+ *
  * @usage   LineSensor sensor;
  *          sensor.init();
  *          sensor.update();
@@ -13,157 +13,100 @@
 #ifndef __LINE_SENSOR_HPP
 #define __LINE_SENSOR_HPP
 
-#include "stm32f1xx_hal.h"
 #include <stdint.h>
+#include "stm32f1xx_hal.h"
 
 /**
  * @class LineSensor
  * @brief 灰度传感器管理类
  */
-class LineSensor
-{
+
+
+class LineSensor {
 public:
-    /* 传感器数量 */
-    static constexpr uint8_t NUM_SENSORS = 8;
-    
-    /* 默认黑白阈值（ADC值，0-4095） */
-    static constexpr uint16_t DEFAULT_THRESHOLD = 2000;
-    
-    /**
-     * @brief 巡线模式枚举
-     */
-    enum class LineMode {
-        BLACK_ON_WHITE = 0,  ///< 白底黑线模式（默认）
-        WHITE_ON_BLACK = 1   ///< 黑底白线模式
-    };
-    
-    /**
-     * @brief 构造函数
-     */
     LineSensor();
+
+    enum class Mode { WHITHE_LINE, BLACK_LINE, UNKNOWN };
+
+    void setMode(Mode mode);
+
+    void getRawData(uint16_t data[8]);
+
+    void getData(uint16_t data[8]);
+
+    void medianFilter(uint16_t data[8]);
+
+    void lowPassFilter(uint16_t data[8]);
+
+    void setThreshold(uint16_t black_line_threshold = 1550, uint16_t white_line_threshold = 150);
+
+    void calibrateWhite();  // 白值校准
+    void calibrateBlack();  // 黑值校准
+    void autoCalibrate();   // 自动校准
+    
+    // ========== 滤波器控制接口 ==========
     
     /**
-     * @brief 析构函数
+     * @brief 设置低通滤波系数（浮点数方式）
+     * @param alpha 滤波系数 (0.0 - 1.0)
+     *              0.0 = 最平滑（慢响应）
+     *              1.0 = 无滤波（快响应）
+     *              推荐值: 0.3 - 0.5
      */
-    ~LineSensor();
+    void setFilterAlpha(float alpha);
     
     /**
-     * @brief 初始化传感器（ADC + DMA）
+     * @brief 设置低通滤波系数（整数方式）
+     * @param alpha_numerator α的分子 (0 - 256)
+     *                        77  = α ≈ 0.3 (平滑)
+     *                        102 = α ≈ 0.4 (推荐)
+     *                        128 = α ≈ 0.5 (适中)
+     *                        179 = α ≈ 0.7 (快速)
      */
-    void init();
+    void setFilterAlphaRaw(uint16_t alpha_numerator);
     
     /**
-     * @brief 更新传感器读数（调用一次读取所有传感器）
+     * @brief 获取当前滤波系数
+     * @return 当前α值（浮点数）
      */
-    void update();
+    float getFilterAlpha() const;
     
     /**
-     * @brief 获取原始 ADC 值
-     * @param index: 传感器索引（0=最左, 7=最右）
-     * @return ADC 值（0-4095）
+     * @brief 重置滤波器（清除历史数据）
      */
-    uint16_t getRawValue(uint8_t index) const;
+    void resetFilter();
     
     /**
-     * @brief 获取所有原始值的指针
-     * @return 指向 8 个元素的数组
+     * @brief 检查滤波器是否已初始化
+     * @return true-已初始化，false-未初始化
      */
-    const uint16_t* getRawValues() const { return rawValues_; }
+    bool isFilterInitialized() const;
     
     /**
-     * @brief 检测是否为黑色
-     * @param index: 传感器索引
-     * @return true=黑色, false=白色
+     * @brief 根据速度自动调整滤波系数
+     * @param speed_mps 小车速度（米/秒）
+     *                  < 0.3 m/s: 使用强滤波 (α=0.3)
+     *                  0.3-0.6:   使用中等滤波 (α=0.4)
+     *                  > 0.6:     使用弱滤波 (α=0.7)
      */
-    bool isBlack(uint8_t index) const;
-    
-    /**
-     * @brief 获取黑白状态字节（位图）
-     * @return 8位数据，bit0=最左侧传感器
-     * @example 0b00011000 = 中间两个检测到黑线
-     */
-    uint8_t getBlackPattern() const;
-    
-    /**
-     * @brief 计算线条位置（加权平均法）
-     * @return 位置值 (-1000 ~ +1000)
-     *         -1000 = 线在最左侧
-     *             0 = 线在中间
-     *         +1000 = 线在最右侧
-     *         INT16_MIN = 未检测到线
-     */
-    int16_t getPosition() const;
-    
-    /**
-     * @brief 检测是否在线上
-     * @return true=至少一个传感器检测到黑线
-     */
-    bool isOnLine() const;
-    
-    /**
-     * @brief 检测是否是十字路口（全黑）
-     * @return true=所有传感器都检测到黑线
-     */
-    bool isCrossroad() const;
-    
-    /**
-     * @brief 检测是否完全丢线（全白）
-     * @return true=所有传感器都检测到白色
-     */
-    bool isLost() const;
-    
-    /**
-     * @brief 设置黑白判断阈值
-     * @param threshold: ADC阈值（0-4095）
-     */
-    void setThreshold(uint16_t threshold);
-    
-    /**
-     * @brief 自动校准阈值（白色地面）
-     * @note 将传感器放在白色地面上调用此函数
-     */
-    void calibrateWhite();
-    
-    /**
-     * @brief 自动校准阈值（黑色线条）
-     * @note 将传感器放在黑色线条上调用此函数
-     */
-    void calibrateBlack();
-    
-    /**
-     * @brief 完成校准（计算最终阈值）
-     */
-    void finishCalibration();
-    
-    /**
-     * @brief 获取当前阈值
-     */
-    uint16_t getThreshold() const { return threshold_; }
-    
-    /**
-     * @brief 设置巡线模式
-     * @param mode: 巡线模式
-     *              BLACK_ON_WHITE - 白底黑线（默认）
-     *              WHITE_ON_BLACK - 黑底白线
-     */
-    void setLineMode(LineMode mode);
-    
-    /**
-     * @brief 获取当前巡线模式
-     * @return 当前模式
-     */
-    LineMode getLineMode() const { return lineMode_; }
-    
+    void setFilterBySpeed(float speed_mps);
+
 private:
-    uint16_t rawValues_[NUM_SENSORS];     // 原始 ADC 值
-    uint16_t threshold_;                  // 黑白判断阈值
-    uint16_t whiteValue_;                 // 白色校准值
-    uint16_t blackValue_;                 // 黑色校准值
-    bool initialized_;                    // 初始化标志
-    LineMode lineMode_;                   // 巡线模式
+    uint16_t black_line_threszhold_ = 1550;
+    uint16_t white_line_threszhold_ = 150;
+    Mode mode_;
     
-    // 位置权重（左侧为负，右侧为正）
-    static const int16_t POSITION_WEIGHTS[NUM_SENSORS];
+    // 低通滤波器历史数据（用于存储上一次的滤波结果）
+    uint16_t filtered_data_[8] = {0};
+    bool filter_initialized_ = false;  // 滤波器是否已初始化
+    
+    // 低通滤波器系数（α值）
+    // α = alpha_numerator_ / 256
+    // 默认值: 102/256 ≈ 0.4 (平衡响应速度和滤波效果)
+    uint16_t alpha_numerator_ = 102;
+    
+    // 固定分母（使用256便于位移优化）
+    static constexpr uint16_t ALPHA_DENOMINATOR = 256;
 };
 
 #endif /* __LINE_SENSOR_HPP */
