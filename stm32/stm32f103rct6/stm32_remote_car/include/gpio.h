@@ -17,6 +17,11 @@ extern "C" {
 
 #include "stm32f1xx_hal.h"
 
+
+// LED配置（在gpio.c中定义）
+extern const uint16_t LED_PIN;
+extern GPIO_TypeDef* LED_PORT;
+
 /* Exported functions prototypes ---------------------------------------------*/
 
 /**
@@ -24,6 +29,7 @@ extern "C" {
  * @note Enables clocks for GPIOA, GPIOB, GPIOC, GPIOD
  *       Motor control pins are configured through TIM peripheral
  */
+
 void MX_GPIO_Init(void);
 
 /**

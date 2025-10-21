@@ -28,6 +28,11 @@ extern "C" {
 /* ADC 句柄 */
 extern ADC_HandleTypeDef hadc1;
 
+/**
+ * @brief 错误处理函数（由main.cpp提供）
+ */
+void Error_Handler(void);
+
 /* 初始化函数 */
 void MX_ADC1_Init(void);
 

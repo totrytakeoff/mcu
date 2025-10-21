@@ -1,167 +1,216 @@
 /**
- * @file    i2c_scan.cpp
- * @brief   I2C总线设备扫描程序
+ * @file    main.cpp
+ * @brief   简洁巡线系统（带按钮校准功能）
  * @author  AI Assistant
  * @date    2024
- * 
- * 用途：扫描I2C总线上的所有设备，帮助诊断硬件连接问题
  */
 
-#include "stm32f1xx_hal.h"
+#include <cstdint>
+#include "adc.h"
+#include "button.hpp"
 #include "debug.hpp"
+#include "eeprom.hpp"
 #include "gpio.h"
+#include "i2c.h"
+#include "line_sensor.hpp"
+#include "motor.hpp"
+#include "stm32f1xx_hal.h"
+#include "stm32f1xx_hal_gpio.h"
 #include "tim.h"
 #include "usart.h"
 
+/* ========== 全局对象 ========== */
+
+
+
+enum class RUN_MODE { NORMAL, CALIBRATING, OTHER, TEST };
+
+RUN_MODE g_run_mode = RUN_MODE::NORMAL;
+
+
+Motor motor1, motor2, motor3, motor4;
+
+uint16_t g_sensor_data[8];
+
+const int16_t sensor_offset[8] = {0, 120, 0, 0, 0, 0, 0, 0};
+
+// 校准按钮（PD2，上拉模式，按下为低电平，200ms防抖）
+Button calibButton(GPIOD, GPIO_PIN_2, ButtonMode::PULL_UP, 200);
+
+/* ========== 函数声明 ========== */
 extern "C" {
 void SystemClock_Config(void);
+void Error_Handler(void);
 }
 
-/* I2C句柄 */
-I2C_HandleTypeDef hi2c2;
 
-/**
- * @brief I2C2初始化
- */
-void MX_I2C2_Init(void)
-{
-    hi2c2.Instance = I2C2;
-    hi2c2.Init.ClockSpeed = 100000;
-    hi2c2.Init.DutyCycle = I2C_DUTYCYCLE_2;
-    hi2c2.Init.OwnAddress1 = 0;
-    hi2c2.Init.AddressingMode = I2C_ADDRESSINGMODE_7BIT;
-    hi2c2.Init.DualAddressMode = I2C_DUALADDRESS_DISABLE;
-    hi2c2.Init.OwnAddress2 = 0;
-    hi2c2.Init.GeneralCallMode = I2C_GENERALCALL_DISABLE;
-    hi2c2.Init.NoStretchMode = I2C_NOSTRETCH_DISABLE;
-    
-    if (HAL_I2C_Init(&hi2c2) != HAL_OK) {
-        Debug_Printf("[ERROR] I2C初始化失败\r\n");
-    }
-}
 
-/**
- * @brief I2C2 MSP初始化
- */
-void HAL_I2C_MspInit(I2C_HandleTypeDef* hi2c)
-{
-    GPIO_InitTypeDef GPIO_InitStruct = {0};
-    
-    if(hi2c->Instance == I2C2) {
-        __HAL_RCC_GPIOB_CLK_ENABLE();
-        __HAL_RCC_I2C2_CLK_ENABLE();
-        
-        GPIO_InitStruct.Pin = GPIO_PIN_10 | GPIO_PIN_11;
-        GPIO_InitStruct.Mode = GPIO_MODE_AF_OD;
-        GPIO_InitStruct.Pull = GPIO_NOPULL;
-        GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_HIGH;
-        HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
-    }
-}
-
-/**
- * @brief 扫描I2C总线
- */
-void I2C_Scan(void)
-{
-    Debug_Printf("\r\n========================================\r\n");
-    Debug_Printf("   I2C总线设备扫描\r\n");
-    Debug_Printf("========================================\r\n");
-    Debug_Printf("正在扫描地址 0x00-0x7F...\r\n\r\n");
-    
-    uint8_t found_count = 0;
-    
-    for (uint8_t addr = 0; addr < 128; addr++) {
-        // 尝试探测设备（7位地址）
-        HAL_StatusTypeDef result = HAL_I2C_IsDeviceReady(&hi2c2, addr << 1, 3, 100);
-        
-        if (result == HAL_OK) {
-            Debug_Printf("[FOUND] 设备地址: 0x%02X\r\n", addr);
-            found_count++;
-            
-            // 识别常见设备
-            if (addr == 0x50) {
-                Debug_Printf("        --> 可能是 24C02/24C04 EEPROM\r\n");
-            } else if (addr >= 0x50 && addr <= 0x57) {
-                Debug_Printf("        --> 可能是 24Cxx EEPROM\r\n");
-            } else if (addr == 0x68) {
-                Debug_Printf("        --> 可能是 MPU6050/DS3231\r\n");
-            } else if (addr == 0x76 || addr == 0x77) {
-                Debug_Printf("        --> 可能是 BMP280/BME280\r\n");
-            }
-        }
-        
-        // 每16个地址打印一个进度点
-        if ((addr + 1) % 16 == 0) {
-            Debug_Printf(".");
-        }
-    }
-    
-    Debug_Printf("\r\n\r\n========================================\r\n");
-    if (found_count > 0) {
-        Debug_Printf("✅ 扫描完成：找到 %d 个I2C设备\r\n", found_count);
-    } else {
-        Debug_Printf("❌ 扫描完成：未找到任何I2C设备\r\n");
-        Debug_Printf("\r\n可能的原因：\r\n");
-        Debug_Printf("  1. 没有连接I2C设备\r\n");
-        Debug_Printf("  2. PB10/PB11连接错误\r\n");
-        Debug_Printf("  3. 缺少上拉电阻（需要4.7kΩ）\r\n");
-        Debug_Printf("  4. I2C设备供电不正常\r\n");
-    }
-    Debug_Printf("========================================\r\n");
-}
-
-/**
- * @brief 主程序
- */
-extern "C" int main(void)
-{
-    /* 1. HAL库初始化 */
+/* ========== 主程序 ========== */
+extern "C" int main(void) {
+    /* ========== 1. HAL库初始化 ========== */
     HAL_Init();
+
+    /* ========== 2. 系统时钟配置 ========== */
     SystemClock_Config();
-    
-    /* 2. GPIO和串口初始化 */
+
+    /* ========== 3. GPIO初始化 ========== */
     MX_GPIO_Init();
-    MX_USART2_UART_Init();
-    Debug_Enable();
-    
-    Debug_Printf("\r\n\r\n");
-    Debug_Printf("========================================\r\n");
-    Debug_Printf("   STM32 I2C设备扫描工具\r\n");
-    Debug_Printf("========================================\r\n");
-    Debug_Printf("I2C接口: I2C2\r\n");
-    Debug_Printf("SCL引脚: PB10\r\n");
-    Debug_Printf("SDA引脚: PB11\r\n");
-    Debug_Printf("速率: 100kHz\r\n");
-    
-    HAL_Delay(1000);
-    
-    /* 3. 初始化I2C */
-    Debug_Printf("\r\n[INIT] 正在初始化I2C2...\r\n");
+
+    /* ========== 4. 定时器初始化（PWM） ========== */
+    MX_TIM3_Init();
+
+    /* ========== 5. USART初始化 ========== */
+    MX_USART1_UART_Init();
+    Debug_Enable();  // 启用调试输出
+
+    /* ========== 6. ADC初始化（8路灰度传感器） ========== */
+    MX_ADC1_Init();
+
+    /* ========== 6b. I2C初始化（EEPROM） ========== */
     MX_I2C2_Init();
-    Debug_Printf("[OK] I2C2初始化完成\r\n");
-    
-    HAL_Delay(500);
-    
-    /* 4. 扫描I2C总线 */
-    I2C_Scan();
-    
-    /* 5. 完成 */
-    Debug_Printf("\r\n提示：如果没有找到设备，请检查硬件连接\r\n");
-    Debug_Printf("提示：24C02的地址通常是 0x50\r\n");
-    
+
+    /* ========== 7. 启动所有 PWM 通道 ========== */
+    HAL_TIM_PWM_Start(&htim3, TIM_CHANNEL_1);
+    HAL_TIM_PWM_Start(&htim3, TIM_CHANNEL_2);
+    HAL_TIM_PWM_Start(&htim3, TIM_CHANNEL_3);
+    HAL_TIM_PWM_Start(&htim3, TIM_CHANNEL_4);
+
+    /* ========== 8. 初始化 4 个电机 ========== */
+    motor1.init(&htim3, TIM_CHANNEL_1);
+    motor2.init(&htim3, TIM_CHANNEL_2);
+    motor3.init(&htim3, TIM_CHANNEL_3);
+    motor4.init(&htim3, TIM_CHANNEL_4);
+
+    /* ========== 9. 初始化校准按钮 ========== */
+    calibButton.init();
+
+    /* ========== 10. 初始化EEPROM和传感器 ========== */
+    Debug_Printf("\r\n========== 巡线系统启动 ==========\r\n");
+
+    EEPROM eeprom;
+    Debug_Printf("[INIT] 正在初始化EEPROM...\r\n");
+    if (!eeprom.init()) {
+        Debug_Printf("[WARN] EEPROM初始化失败，无法保存校准数据\r\n");
+    } else {
+        Debug_Printf("[OK] EEPROM初始化成功\r\n");
+    }
+
+    LineSensor line_sensor;
+
+    line_sensor.setSensorOffsets(sensor_offset);
+
+    // 加载校准数据
+    Debug_Printf("[INIT] 正在加载传感器校准数据...\r\n");
+    if (!line_sensor.loadCalibration(eeprom)) {
+        Debug_Printf("[INFO] 未找到有效校准数据\r\n");
+        Debug_Printf("[INFO] 请按PD2按钮进行校准\r\n");
+    }
+
+    Debug_Printf("\r\n========== 系统就绪 ==========\r\n");
+    Debug_Printf("提示：长按PD2按钮3秒可随时重新校准传感器\r\n\r\n");
+
+    /* ========== 11. 主循环 ========== */
+    static bool long_press_handled = false;  // 防止长按重复触发
+
+    // 注意set是关 reset是亮
+    // HAL_GPIO_WritePin(LED_PORT, LED_PIN, GPIO_PIN_SET);
+
     while (1) {
-        HAL_Delay(1000);
+        switch (g_run_mode) {
+            case RUN_MODE::NORMAL: {
+                // 检测长按3秒进入校准模式
+                if (calibButton.isLongPressed(3000) && !long_press_handled) {
+                    Debug_Printf("\r\n🔧 长按检测到，进入校准模式...\r\n");
+                    g_run_mode = RUN_MODE::CALIBRATING;
+                    long_press_handled = true;
+                    break;  // 立即进入校准模式
+                }
+
+                // 释放按钮后重置长按标志
+                if (calibButton.isReleased()) {
+                    long_press_handled = false;
+                }
+
+                // ========== 正常巡线逻辑 ==========
+                line_sensor.getData(g_sensor_data);
+
+                // 可选：打印传感器数据（调试用）
+                // Debug_Printf("SENSOR_DATA: %d %d %d %d %d %d %d %d \r\n", g_sensor_data[0],
+                //              g_sensor_data[1], g_sensor_data[2], g_sensor_data[3], g_sensor_data[4],
+                //              g_sensor_data[5], g_sensor_data[6], g_sensor_data[7]);
+
+                // TODO: 在这里添加你的巡线控制逻辑
+                // 例如：计算位置偏差、PID控制、电机驱动等
+
+                break;
+            }
+
+            case RUN_MODE::CALIBRATING: {
+                // 进入校准模式亮 D10
+                HAL_GPIO_WritePin(LED_PORT, LED_PIN, GPIO_PIN_RESET);
+                calibButton.reset();
+                // 执行手动分步校准（内部等待按钮，分三步完成）
+                line_sensor.autoCalibrate(calibButton);
+
+                // 保存到EEPROM
+                Debug_Printf("\r\n[SAVE] 正在保存校准数据到EEPROM...\r\n");
+                if (line_sensor.saveCalibration(eeprom)) {
+                    Debug_Printf("[SUCCESS] ✅ 校准完成并已保存！\r\n");
+
+                    // LED闪烁3次表示成功
+                    for (int i = 0; i < 3; i++) {
+                        HAL_GPIO_WritePin(LED_PORT, LED_PIN, GPIO_PIN_SET);
+                        HAL_Delay(200);
+                        HAL_GPIO_WritePin(LED_PORT, LED_PIN, GPIO_PIN_RESET);
+                        HAL_Delay(200);
+                    }
+                } else {
+                    Debug_Printf("[ERROR] ❌ 校准数据保存失败！\r\n");
+                }
+
+                Debug_Printf("\r\n");
+                Debug_Printf("╔════════════════════════════════════════╗\r\n");
+                Debug_Printf("║       退出校准，恢复巡线模式           ║\r\n");
+                Debug_Printf("╚════════════════════════════════════════╝\r\n");
+                Debug_Printf("\r\n");
+
+                
+                HAL_GPIO_WritePin(LED_PORT, LED_PIN, GPIO_PIN_SET);
+                HAL_Delay(1000);
+
+                // 退出校准模式
+                g_run_mode = RUN_MODE::NORMAL;
+                break;
+            }
+
+            case RUN_MODE::TEST: {
+
+                if (calibButton.isPressed()) {
+                    HAL_GPIO_TogglePin(LED_PORT, LED_PIN);
+                }
+
+                break;
+            }
+
+            default:
+                break;
+        }
+
+        HAL_Delay(10);  // 小延迟，避免CPU占用过高
     }
 }
 
-/**
- * @brief 系统时钟配置
- */
+/* ========== 系统配置 ========== */
 void SystemClock_Config(void) {
     RCC_OscInitTypeDef RCC_OscInitStruct = {0};
     RCC_ClkInitTypeDef RCC_ClkInitStruct = {0};
+    RCC_PeriphCLKInitTypeDef PeriphClkInit = {0};
 
+    /**
+     * Initializes the RCC Oscillators:
+     * - External HSE: 8MHz
+     * - PLL: 8MHz * 9 = 72MHz
+     */
     RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSE;
     RCC_OscInitStruct.HSEState = RCC_HSE_ON;
     RCC_OscInitStruct.HSEPredivValue = RCC_HSE_PREDIV_DIV1;
@@ -171,17 +220,60 @@ void SystemClock_Config(void) {
     RCC_OscInitStruct.PLL.PLLMUL = RCC_PLL_MUL9;
 
     if (HAL_RCC_OscConfig(&RCC_OscInitStruct) != HAL_OK) {
-        while(1);
+        Error_Handler();
     }
 
-    RCC_ClkInitStruct.ClockType = RCC_CLOCKTYPE_HCLK | RCC_CLOCKTYPE_SYSCLK | 
-                                   RCC_CLOCKTYPE_PCLK1 | RCC_CLOCKTYPE_PCLK2;
+    /**
+     * Initializes the CPU, AHB and APB buses clocks:
+     * - SYSCLK: 72MHz
+     * - AHB: 72MHz
+     * - APB1: 36MHz (max for STM32F103)
+     * - APB2: 72MHz
+     */
+    RCC_ClkInitStruct.ClockType =
+            RCC_CLOCKTYPE_HCLK | RCC_CLOCKTYPE_SYSCLK | RCC_CLOCKTYPE_PCLK1 | RCC_CLOCKTYPE_PCLK2;
     RCC_ClkInitStruct.SYSCLKSource = RCC_SYSCLKSOURCE_PLLCLK;
     RCC_ClkInitStruct.AHBCLKDivider = RCC_SYSCLK_DIV1;
     RCC_ClkInitStruct.APB1CLKDivider = RCC_HCLK_DIV2;
     RCC_ClkInitStruct.APB2CLKDivider = RCC_HCLK_DIV1;
 
     if (HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_2) != HAL_OK) {
-        while(1);
+        Error_Handler();
     }
+
+    /* Peripheral Clock Configuration */
+    PeriphClkInit.PeriphClockSelection = RCC_PERIPHCLK_ADC;
+    PeriphClkInit.AdcClockSelection = RCC_ADCPCLK2_DIV6;
+    if (HAL_RCCEx_PeriphCLKConfig(&PeriphClkInit) != HAL_OK) {
+        Error_Handler();
+    }
+}
+
+/**
+ * @brief  Error Handler
+ * @note   Called when a HAL function returns an error
+ * @retval None
+ */
+void Error_Handler(void) {
+    /* Disable interrupts */
+    __disable_irq();
+
+    /* Infinite loop on error */
+    while (1) {
+        // Could add LED blinking or other error indication here
+    }
+}
+
+/**
+ * @brief  HAL MSP Initialization
+ * @retval None
+ */
+void HAL_MspInit(void) {
+    __HAL_RCC_AFIO_CLK_ENABLE();
+    __HAL_RCC_PWR_CLK_ENABLE();
+
+    /* System interrupt init */
+
+    /** NOJTAG: JTAG-DP Disabled and SW-DP Enabled */
+    __HAL_AFIO_REMAP_SWJ_NOJTAG();
 }

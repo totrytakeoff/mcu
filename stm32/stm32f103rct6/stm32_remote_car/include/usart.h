@@ -19,6 +19,11 @@ extern UART_HandleTypeDef huart1;
 extern UART_HandleTypeDef huart2;
 
 /**
+ * @brief 错误处理函数（由main.cpp提供）
+ */
+void Error_Handler(void);
+
+/**
  * @brief USART1初始化
  * 配置：9600波特率，8位数据，1位停止位，无校验
  * 用途：E49无线模块通信

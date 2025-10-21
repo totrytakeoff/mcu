@@ -15,6 +15,26 @@
 
 #include <stdint.h>
 #include "stm32f1xx_hal.h"
+#include "eeprom.hpp"
+
+
+
+
+
+
+
+/**
+ * @brief 传感器校准数据结构体
+ * 
+ * 保存黑白线的阈值到EEPROM
+ * 总共占用 4 + 8*2 + 8*2 + 1 = 37字节
+ */
+struct __attribute__((packed)) SensorCalibration {
+    uint32_t magic_number;          ///< 魔术数字 0xCAFEBABE（用于验证数据有效性）
+    uint16_t white_values[8];       ///< 白色校准值（每个传感器）
+    uint16_t black_values[8];       ///< 黑色校准值（每个传感器）
+    // CRC会自动添加在writeStructCRC时
+};
 
 /**
  * @class LineSensor
@@ -26,10 +46,6 @@ class LineSensor {
 public:
     LineSensor();
 
-    enum class Mode { WHITHE_LINE, BLACK_LINE, UNKNOWN };
-
-    void setMode(Mode mode);
-
     void getRawData(uint16_t data[8]);
 
     void getData(uint16_t data[8]);
@@ -40,9 +56,87 @@ public:
 
     void setThreshold(uint16_t black_line_threshold = 1550, uint16_t white_line_threshold = 150);
 
-    void calibrateWhite();  // 白值校准
-    void calibrateBlack();  // 黑值校准
-    void autoCalibrate();   // 自动校准
+    // ========== 校准相关接口 ==========
+    
+    /**
+     * @brief 白色校准
+     * @note 将传感器放在白色区域上，调用此函数采集白色值
+     */
+    void calibrateWhite();
+    
+    /**
+     * @brief 黑色校准
+     * @note 将传感器放在黑色线上，调用此函数采集黑色值
+     */
+    void calibrateBlack();
+    
+    /**
+     * @brief 手动分步校准（推荐）
+     * @param button 校准按钮引用
+     * @note 分三步进行：
+     *       1. 按下按钮 → 白色校准
+     *       2. 按下按钮 → 黑色校准
+     *       3. 按下按钮 → 计算阈值
+     */
+    void autoCalibrate(class Button& button);
+    
+    /**
+     * @brief 从EEPROM加载校准数据
+     * @param eeprom EEPROM对象引用
+     * @return true 加载成功
+     * @return false 加载失败（使用默认值）
+     */
+    bool loadCalibration(EEPROM& eeprom);
+    
+    /**
+     * @brief 保存校准数据到EEPROM
+     * @param eeprom EEPROM对象引用
+     * @return true 保存成功
+     * @return false 保存失败
+     */
+    bool saveCalibration(EEPROM& eeprom);
+    
+    /**
+     * @brief 获取校准数据
+     * @param calib 校准数据结构体
+     */
+    void getCalibration(SensorCalibration& calib) const;
+    
+    /**
+     * @brief 应用校准数据
+     * @param calib 校准数据结构体
+     */
+    void applyCalibration(const SensorCalibration& calib);
+    
+    // ========== 传感器补偿接口 ==========
+    
+    /**
+     * @brief 设置传感器偏移补偿值
+     * @param offsets 8个传感器的偏移值数组（正值表示增加，负值表示减少）
+     * @note 用于补偿硬件差异，例如：某个传感器读数偏低120，可设置offsets[i]=120
+     * @example
+     *   int16_t offsets[8] = {0, 120, 0, 0, 0, 0, 0, 0};  // 2号传感器补偿+120
+     *   sensor.setSensorOffsets(offsets);
+     */
+    void setSensorOffsets(const int16_t offsets[8]);
+    
+    /**
+     * @brief 清除传感器偏移补偿（恢复为0）
+     */
+    void clearSensorOffsets();
+    
+    /**
+     * @brief 获取当前的传感器偏移补偿值
+     * @param offsets 输出数组（8个元素）
+     */
+    void getSensorOffsets(int16_t offsets[8]) const;
+    
+    /**
+     * @brief 获取校准后的白色/黑色原始值（用于算法处理）
+     * @param white_vals 输出白色校准值数组（8个元素）
+     * @param black_vals 输出黑色校准值数组（8个元素）
+     */
+    void getCalibrationValues(uint16_t white_vals[8], uint16_t black_vals[8]) const;
     
     // ========== 滤波器控制接口 ==========
     
@@ -94,7 +188,13 @@ public:
 private:
     uint16_t black_line_threszhold_ = 1550;
     uint16_t white_line_threszhold_ = 150;
-    Mode mode_;
+    
+    // 校准数据
+    uint16_t white_calibration_[8] = {0};  ///< 白色校准值
+    uint16_t black_calibration_[8] = {0};  ///< 黑色校准值
+    
+    // 传感器偏移补偿
+    int16_t sensor_offsets_[8] = {0};      ///< 传感器偏移补偿值
     
     // 低通滤波器历史数据（用于存储上一次的滤波结果）
     uint16_t filtered_data_[8] = {0};
@@ -107,6 +207,10 @@ private:
     
     // 固定分母（使用256便于位移优化）
     static constexpr uint16_t ALPHA_DENOMINATOR = 256;
+    
+    // EEPROM地址常量
+    static constexpr uint8_t CALIBRATION_EEPROM_ADDR = 0x40;  ///< 校准数据存储地址
+    static constexpr uint32_t CALIBRATION_MAGIC = 0xCAFEBABE; ///< 校准数据魔术数字
 };
 
 #endif /* __LINE_SENSOR_HPP */
