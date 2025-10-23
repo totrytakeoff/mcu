@@ -114,8 +114,8 @@ void main(void)
         // 2. 处理消息队列 (立即处理所有待发送的消息)
         while (Keys_GetMessage(&msg))
         {
-            // 发送按键码到 E49 无线模块
-            UART_SendChar(msg.cmd);
+            // 发送安全数据包到 E49 无线模块
+            UART_SendSecureCommand(msg.cmd);
         }
         
         // 3. 其他任务 (预留)

@@ -81,6 +81,16 @@ public:
     void stop();
 
     /**
+     * @brief 立即驱动（无梯形速度轮廓，实时生效）
+     * @param straightSpeed 前进/后退速度 (-100 到 100)
+     * @param turnSpeed 转向速度 (-100 到 100)
+     *
+     * 说明：绕过 MotionProfile，直接将组合后的左右轮速度应用到电机。
+     *       仅用于需要毫秒级响应的闭环控制（如巡线）。
+     */
+    void driveImmediate(int straightSpeed, int turnSpeed);
+
+    /**
      * @brief 获取当前直行速度指令
      * @return 当前直行速度 (-100 到 100)
      */
@@ -91,6 +101,18 @@ public:
      * @return 当前转向速度 (-100 到 100)
      */
     int getTurnSpeed() const;
+
+    /**
+     * @brief 设置转向灵敏度（影响转向指令占比）
+     * @param sensitivity 0.0 - 1.5，默认0.8
+     */
+    void setTurnSensitivity(float sensitivity);
+
+    /**
+     * @brief 设置最小前进速度底线（防止大转向时单侧停转）
+     * @param floor 百分比 0-100，建议 5-15
+     */
+    void setMinForwardFloor(int floor);
 
 private:
     Motor leftFrontMotor_;
@@ -103,6 +125,10 @@ private:
     // 速度剖面（直行与转向）
     MotionProfile motionStraight_;
     MotionProfile motionTurn_;
+
+    // 可调参数
+    float turn_sensitivity_ = 0.8f;   // 转向灵敏度
+    int min_forward_floor_ = 0;       // 最小前进速度底线（0表示关闭）
 
     /**
      * @brief 应用死区滤波消除噪声

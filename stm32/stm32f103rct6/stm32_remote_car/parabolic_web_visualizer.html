@@ -1,0 +1,724 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>抛物线拟合巡线算法可视化工具</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Microsoft YaHei', Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            padding: 20px;
+            min-height: 100vh;
+        }
+        
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 15px;
+            padding: 30px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+        }
+        
+        h1 {
+            text-align: center;
+            color: #333;
+            margin-bottom: 10px;
+            font-size: 2em;
+        }
+        
+        .subtitle {
+            text-align: center;
+            color: #666;
+            margin-bottom: 30px;
+            font-size: 0.9em;
+        }
+        
+        .controls {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 10px;
+            margin-bottom: 30px;
+        }
+        
+        .input-group {
+            margin-bottom: 15px;
+        }
+        
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+            color: #555;
+        }
+        
+        input[type="text"] {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #ddd;
+            border-radius: 5px;
+            font-size: 16px;
+            font-family: 'Courier New', monospace;
+            transition: border-color 0.3s;
+        }
+        
+        input[type="text"]:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+        
+        .button-group {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+        
+        button {
+            flex: 1;
+            min-width: 150px;
+            padding: 12px 20px;
+            border: none;
+            border-radius: 5px;
+            font-size: 16px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+        
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        }
+        
+        .btn-secondary {
+            background: #6c757d;
+            color: white;
+        }
+        
+        .btn-secondary:hover {
+            background: #5a6268;
+        }
+        
+        .btn-toggle {
+            background: #28a745;
+            color: white;
+        }
+        
+        .btn-toggle.white-mode {
+            background: #17a2b8;
+        }
+        
+        .presets {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            margin-top: 10px;
+        }
+        
+        .preset-btn {
+            padding: 8px 15px;
+            background: #e9ecef;
+            border: 2px solid #dee2e6;
+            border-radius: 5px;
+            font-size: 14px;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        
+        .preset-btn:hover {
+            background: #667eea;
+            color: white;
+            border-color: #667eea;
+        }
+        
+        .results {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+        
+        .result-card {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 10px;
+            border-left: 5px solid #667eea;
+        }
+        
+        .result-card h3 {
+            color: #333;
+            margin-bottom: 15px;
+            font-size: 1.2em;
+        }
+        
+        .result-item {
+            display: flex;
+            justify-content: space-between;
+            padding: 8px 0;
+            border-bottom: 1px solid #dee2e6;
+        }
+        
+        .result-item:last-child {
+            border-bottom: none;
+        }
+        
+        .result-label {
+            color: #666;
+            font-weight: 500;
+        }
+        
+        .result-value {
+            color: #333;
+            font-weight: bold;
+            font-family: 'Courier New', monospace;
+        }
+        
+        .position-display {
+            text-align: center;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            border-radius: 10px;
+            margin-bottom: 30px;
+        }
+        
+        .position-value {
+            font-size: 3em;
+            font-weight: bold;
+            margin: 10px 0;
+        }
+        
+        .position-bar {
+            width: 100%;
+            height: 40px;
+            background: rgba(255,255,255,0.3);
+            border-radius: 20px;
+            position: relative;
+            margin-top: 20px;
+        }
+        
+        .position-indicator {
+            position: absolute;
+            width: 20px;
+            height: 50px;
+            background: #ffc107;
+            border-radius: 5px;
+            top: -5px;
+            transform: translateX(-50%);
+            transition: left 0.3s;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.3);
+        }
+        
+        .position-labels {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 10px;
+            font-size: 0.9em;
+            opacity: 0.9;
+        }
+        
+        .charts {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+        }
+        
+        .chart-container {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 10px;
+        }
+        
+        canvas {
+            max-width: 100%;
+        }
+        
+        @media (max-width: 1200px) {
+            .results, .charts {
+                grid-template-columns: 1fr;
+            }
+        }
+        
+        .formula {
+            background: #fff3cd;
+            border: 2px solid #ffc107;
+            border-radius: 8px;
+            padding: 15px;
+            margin: 20px 0;
+            font-family: 'Courier New', monospace;
+            text-align: center;
+        }
+        
+        .formula-title {
+            font-weight: bold;
+            margin-bottom: 10px;
+            color: #856404;
+        }
+        
+        .formula-content {
+            font-size: 1.1em;
+            color: #333;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🚗 抛物线拟合巡线算法可视化工具</h1>
+        <p class="subtitle">一比一复刻STM32代码 | 实时可视化8点传感器数据分析</p>
+        
+        <div class="controls">
+            <div class="input-group">
+                <label>传感器数据（8个ADC值，空格分隔）：</label>
+                <input type="text" id="sensorInput" value="1469 1064 716 332 346 604 998 1344" 
+                       placeholder="例如: 1469 1064 716 332 346 604 998 1344">
+            </div>
+            
+            <div class="button-group">
+                <button class="btn-primary" onclick="calculate()">🔄 计算位置</button>
+                <button class="btn-toggle" id="modeBtn" onclick="toggleMode()">🌓 黑底白线</button>
+            </div>
+            
+            <label style="margin-top: 15px;">快速测试数据：</label>
+            <div class="presets">
+                <button class="preset-btn" onclick="loadPreset(0)">📍 居中</button>
+                <button class="preset-btn" onclick="loadPreset(1)">⬛ 纯黑底</button>
+                <button class="preset-btn" onclick="loadPreset(2)">⬜ 纯白底</button>
+                <button class="preset-btn" onclick="loadPreset(3)">🔀 跨白线-1</button>
+                <button class="preset-btn" onclick="loadPreset(4)">🔀 跨白线-2</button>
+                <button class="preset-btn" onclick="loadPreset(5)">⬅️ 偏左</button>
+                <button class="preset-btn" onclick="loadPreset(6)">➡️ 偏右</button>
+            </div>
+        </div>
+        
+        <div class="position-display">
+            <h2>计算位置</h2>
+            <div class="position-value" id="positionValue">0.00</div>
+            <div class="position-bar">
+                <div class="position-indicator" id="positionIndicator"></div>
+            </div>
+            <div class="position-labels">
+                <span>-1000 (最左)</span>
+                <span>0 (居中)</span>
+                <span>+1000 (最右)</span>
+            </div>
+        </div>
+        
+        <div class="formula">
+            <div class="formula-title">抛物线拟合公式</div>
+            <div class="formula-content" id="formulaDisplay">
+                位置 = 峰值传感器位置 + 偏移量 × 传感器间距
+            </div>
+        </div>
+        
+        <div class="results">
+            <div class="result-card">
+                <h3>📊 峰值检测</h3>
+                <div class="result-item">
+                    <span class="result-label">峰值索引</span>
+                    <span class="result-value" id="peakIdx">-</span>
+                </div>
+                <div class="result-item">
+                    <span class="result-label">峰值位置</span>
+                    <span class="result-value" id="peakPos">-</span>
+                </div>
+                <div class="result-item">
+                    <span class="result-label">峰值(预处理后)</span>
+                    <span class="result-value" id="peakVal">-</span>
+                </div>
+            </div>
+            
+            <div class="result-card">
+                <h3>🎯 拟合计算</h3>
+                <div class="result-item">
+                    <span class="result-label">拟合方法</span>
+                    <span class="result-value" id="method">-</span>
+                </div>
+                <div class="result-item">
+                    <span class="result-label">分母 (denominator)</span>
+                    <span class="result-value" id="denominator">-</span>
+                </div>
+                <div class="result-item">
+                    <span class="result-label">偏移量 (offset)</span>
+                    <span class="result-value" id="offset">-</span>
+                </div>
+                <div class="result-item">
+                    <span class="result-label">传感器间距</span>
+                    <span class="result-value">286.0</span>
+                </div>
+            </div>
+            
+            <div class="result-card">
+                <h3>🔢 三点数据</h3>
+                <div class="result-item">
+                    <span class="result-label">y0 (左点)</span>
+                    <span class="result-value" id="y0">-</span>
+                </div>
+                <div class="result-item">
+                    <span class="result-label">y1 (中点/峰值)</span>
+                    <span class="result-value" id="y1">-</span>
+                </div>
+                <div class="result-item">
+                    <span class="result-label">y2 (右点)</span>
+                    <span class="result-value" id="y2">-</span>
+                </div>
+            </div>
+            
+            <div class="result-card">
+                <h3>📐 位置计算</h3>
+                <div class="result-item">
+                    <span class="result-label">基准位置</span>
+                    <span class="result-value" id="basePos">-</span>
+                </div>
+                <div class="result-item">
+                    <span class="result-label">偏移修正</span>
+                    <span class="result-value" id="offsetCorrection">-</span>
+                </div>
+                <div class="result-item">
+                    <span class="result-label">最终位置</span>
+                    <span class="result-value" id="finalPos">-</span>
+                </div>
+            </div>
+        </div>
+        
+        <div class="charts">
+            <div class="chart-container">
+                <canvas id="sensorChart"></canvas>
+            </div>
+            <div class="chart-container">
+                <canvas id="processedChart"></canvas>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        // 常量定义
+        const SENSOR_POSITIONS = [-1000.0, -714.0, -428.0, -142.0, 142.0, 428.0, 714.0, 1000.0];
+        const SENSOR_SPACING = 286.0;
+        const ADC_MAX = 4095.0;
+        
+        // 预设数据
+        const presets = [
+            [1469, 1064, 716, 332, 346, 604, 998, 1344],  // 居中
+            [1597, 1541, 1547, 1497, 1510, 1525, 1550, 1584],  // 纯黑
+            [566, 402, 293, 263, 281, 355, 479, 717],  // 纯白
+            [1214, 1029, 973, 861, 897, 962, 1013, 1148],  // 跨白线-1
+            [962, 770, 690, 613, 638, 685, 732, 918],  // 跨白线-2
+            [1000, 500, 300, 280, 1200, 1400, 1500, 1600],  // 偏左
+            [1600, 1500, 1400, 1200, 280, 300, 500, 1000],  // 偏右
+        ];
+        
+        let lineMode = "WHITE_LINE_ON_BLACK";
+        let sensorChart = null;
+        let processedChart = null;
+        
+        // 初始化图表
+        function initCharts() {
+            const ctx1 = document.getElementById('sensorChart').getContext('2d');
+            const ctx2 = document.getElementById('processedChart').getContext('2d');
+            
+            sensorChart = new Chart(ctx1, {
+                type: 'line',
+                data: {
+                    labels: ['S0', 'S1', 'S2', 'S3', 'S4', 'S5', 'S6', 'S7'],
+                    datasets: [{
+                        label: '原始ADC值',
+                        data: [],
+                        borderColor: 'rgb(75, 192, 192)',
+                        backgroundColor: 'rgba(75, 192, 192, 0.2)',
+                        pointRadius: 8,
+                        pointHoverRadius: 10,
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    plugins: {
+                        title: {
+                            display: true,
+                            text: '原始传感器数据',
+                            font: { size: 16, weight: 'bold' }
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            max: 4095
+                        }
+                    }
+                }
+            });
+            
+            processedChart = new Chart(ctx2, {
+                type: 'bar',
+                data: {
+                    labels: ['S0', 'S1', 'S2', 'S3', 'S4', 'S5', 'S6', 'S7'],
+                    datasets: [{
+                        label: '预处理后的值',
+                        data: [],
+                        backgroundColor: 'rgba(153, 102, 255, 0.6)',
+                        borderColor: 'rgb(153, 102, 255)',
+                        borderWidth: 2
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    plugins: {
+                        title: {
+                            display: true,
+                            text: '预处理后的传感器值',
+                            font: { size: 16, weight: 'bold' }
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true
+                        }
+                    }
+                }
+            });
+        }
+        
+        // 抛物线拟合计算（完全复刻STM32代码）
+        function calculatePosition(sensorData, mode) {
+            const data = [...sensorData];
+            
+            // 1. 数据预处理
+            let values;
+            if (mode === "WHITE_LINE_ON_BLACK") {
+                values = data.map(v => ADC_MAX - v);
+            } else {
+                values = [...data];
+            }
+            
+            // 2. 找到峰值
+            let peakIdx = 0;
+            let peakValue = values[0];
+            for (let i = 1; i < 8; i++) {
+                if (values[i] > peakValue) {
+                    peakValue = values[i];
+                    peakIdx = i;
+                }
+            }
+            
+            let debugInfo = {
+                values: values,
+                peakIdx: peakIdx,
+                peakValue: peakValue,
+                method: 'normal',
+                y0: 0, y1: 0, y2: 0,
+                denominator: 0,
+                offset: 0
+            };
+            
+            // 3. 边界处理
+            if (peakIdx === 0) {
+                debugInfo.method = 'left_edge';
+                const y_m1 = 2.0 * values[0] - values[1];
+                const y0e = values[0];
+                const y1e = values[1];
+                const denom_e = 2.0 * (y_m1 - 2.0 * y0e + y1e);
+                
+                debugInfo.y0 = y_m1;
+                debugInfo.y1 = y0e;
+                debugInfo.y2 = y1e;
+                debugInfo.denominator = denom_e;
+                
+                let offset_e;
+                if (Math.abs(denom_e) < 0.001) {
+                    const weighted_sum = y_m1 * (-1.0) + y0e * 0.0 + y1e * 1.0;
+                    const total_weight = y_m1 + y0e + y1e;
+                    offset_e = total_weight < 0.001 ? 0 : weighted_sum / total_weight;
+                } else {
+                    offset_e = (y_m1 - y1e) / denom_e;
+                }
+                
+                offset_e = Math.max(-1.0, Math.min(1.0, offset_e));
+                debugInfo.offset = offset_e;
+                
+                const finalPos = Math.max(-1000.0, Math.min(1000.0, 
+                    SENSOR_POSITIONS[0] + offset_e * SENSOR_SPACING));
+                
+                return { position: finalPos, debug: debugInfo };
+            }
+            
+            if (peakIdx === 7) {
+                debugInfo.method = 'right_edge';
+                const y0e = values[6];
+                const y1e = values[7];
+                const y2e = 2.0 * values[7] - values[6];
+                const denom_e = 2.0 * (y0e - 2.0 * y1e + y2e);
+                
+                debugInfo.y0 = y0e;
+                debugInfo.y1 = y1e;
+                debugInfo.y2 = y2e;
+                debugInfo.denominator = denom_e;
+                
+                let offset_e;
+                if (Math.abs(denom_e) < 0.001) {
+                    const weighted_sum = y0e * (-1.0) + y1e * 0.0 + y2e * 1.0;
+                    const total_weight = y0e + y1e + y2e;
+                    offset_e = total_weight < 0.001 ? 0 : weighted_sum / total_weight;
+                } else {
+                    offset_e = (y0e - y2e) / denom_e;
+                }
+                
+                offset_e = Math.max(-1.0, Math.min(1.0, offset_e));
+                debugInfo.offset = offset_e;
+                
+                const finalPos = Math.max(-1000.0, Math.min(1000.0,
+                    SENSOR_POSITIONS[7] + offset_e * SENSOR_SPACING));
+                
+                return { position: finalPos, debug: debugInfo };
+            }
+            
+            // 4. 三点抛物线拟合
+            const y0 = values[peakIdx - 1];
+            const y1 = values[peakIdx];
+            const y2 = values[peakIdx + 1];
+            
+            debugInfo.y0 = y0;
+            debugInfo.y1 = y1;
+            debugInfo.y2 = y2;
+            
+            const denominator = 2.0 * (y0 - 2.0 * y1 + y2);
+            debugInfo.denominator = denominator;
+            
+            if (Math.abs(denominator) < 0.001) {
+                debugInfo.method = 'weighted_avg';
+                const weighted_sum = y0 * (-1.0) + y1 * 0.0 + y2 * 1.0;
+                const total_weight = y0 + y1 + y2;
+                
+                if (total_weight < 0.001) {
+                    return { position: SENSOR_POSITIONS[peakIdx], debug: debugInfo };
+                }
+                
+                const offset = weighted_sum / total_weight;
+                debugInfo.offset = offset;
+                
+                return { 
+                    position: SENSOR_POSITIONS[peakIdx] + offset * SENSOR_SPACING,
+                    debug: debugInfo 
+                };
+            }
+            
+            // 5. 计算偏移
+            let offset = (y0 - y2) / denominator;
+            offset = Math.max(-1.0, Math.min(1.0, offset));
+            debugInfo.offset = offset;
+            
+            // 6. 计算最终位置
+            const finalPosition = Math.max(-1000.0, Math.min(1000.0,
+                SENSOR_POSITIONS[peakIdx] + offset * SENSOR_SPACING));
+            
+            return { position: finalPosition, debug: debugInfo };
+        }
+        
+        // 计算并更新显示
+        function calculate() {
+            const input = document.getElementById('sensorInput').value.trim();
+            const data = input.split(/\s+/).map(v => parseInt(v));
+            
+            if (data.length !== 8 || data.some(isNaN)) {
+                alert('请输入8个有效的传感器值！');
+                return;
+            }
+            
+            const result = calculatePosition(data, lineMode);
+            updateDisplay(data, result);
+        }
+        
+        // 更新显示
+        function updateDisplay(sensorData, result) {
+            const { position, debug } = result;
+            
+            // 更新位置显示
+            document.getElementById('positionValue').textContent = position.toFixed(2);
+            const percentage = ((position + 1000) / 2000) * 100;
+            document.getElementById('positionIndicator').style.left = percentage + '%';
+            
+            // 更新峰值信息
+            document.getElementById('peakIdx').textContent = debug.peakIdx;
+            document.getElementById('peakPos').textContent = SENSOR_POSITIONS[debug.peakIdx].toFixed(1);
+            document.getElementById('peakVal').textContent = debug.peakValue.toFixed(1);
+            
+            // 更新拟合信息
+            const methodNames = {
+                'normal': '三点拟合',
+                'left_edge': '左边界处理',
+                'right_edge': '右边界处理',
+                'weighted_avg': '加权平均'
+            };
+            document.getElementById('method').textContent = methodNames[debug.method];
+            document.getElementById('denominator').textContent = debug.denominator.toFixed(4);
+            document.getElementById('offset').textContent = debug.offset.toFixed(4);
+            
+            // 更新三点数据
+            document.getElementById('y0').textContent = debug.y0.toFixed(1);
+            document.getElementById('y1').textContent = debug.y1.toFixed(1);
+            document.getElementById('y2').textContent = debug.y2.toFixed(1);
+            
+            // 更新位置计算
+            document.getElementById('basePos').textContent = SENSOR_POSITIONS[debug.peakIdx].toFixed(1);
+            document.getElementById('offsetCorrection').textContent = 
+                (debug.offset * SENSOR_SPACING).toFixed(2);
+            document.getElementById('finalPos').textContent = position.toFixed(2);
+            
+            // 更新公式显示
+            document.getElementById('formulaDisplay').textContent = 
+                `${SENSOR_POSITIONS[debug.peakIdx].toFixed(1)} + ${debug.offset.toFixed(4)} × ${SENSOR_SPACING.toFixed(1)} = ${position.toFixed(2)}`;
+            
+            // 更新图表
+            sensorChart.data.datasets[0].data = sensorData;
+            sensorChart.data.datasets[0].backgroundColor = sensorData.map((_, i) => 
+                i === debug.peakIdx ? 'rgba(255, 99, 132, 0.6)' : 'rgba(75, 192, 192, 0.2)'
+            );
+            sensorChart.update();
+            
+            processedChart.data.datasets[0].data = debug.values;
+            processedChart.data.datasets[0].backgroundColor = debug.values.map((_, i) => 
+                i === debug.peakIdx ? 'rgba(255, 99, 132, 0.8)' : 'rgba(153, 102, 255, 0.6)'
+            );
+            processedChart.update();
+        }
+        
+        // 切换模式
+        function toggleMode() {
+            const btn = document.getElementById('modeBtn');
+            if (lineMode === "WHITE_LINE_ON_BLACK") {
+                lineMode = "BLACK_LINE_ON_WHITE";
+                btn.textContent = "🌓 白底黑线";
+                btn.classList.add('white-mode');
+            } else {
+                lineMode = "WHITE_LINE_ON_BLACK";
+                btn.textContent = "🌓 黑底白线";
+                btn.classList.remove('white-mode');
+            }
+            calculate();
+        }
+        
+        // 加载预设数据
+        function loadPreset(index) {
+            document.getElementById('sensorInput').value = presets[index].join(' ');
+            calculate();
+        }
+        
+        // 初始化
+        window.onload = function() {
+            initCharts();
+            calculate();
+        };
+    </script>
+</body>
+</html>

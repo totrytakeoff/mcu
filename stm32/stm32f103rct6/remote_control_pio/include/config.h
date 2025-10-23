@@ -45,4 +45,10 @@ __sbit __at (0x94) KEY_F4;  // P1.4
 #define E49_MODE_POWERSAVE    2  // 省电模式 (M0=0, M1=1)
 #define E49_MODE_CONFIG       3  // 配置模式 (M0=1, M1=1)
 
+// ========== 安全配置 ==========
+#define ENABLE_SECURITY     1           // 启用安全模式
+#define DEVICE_ID          0xA5F3       // 遥控器唯一ID（每个遥控器不同！）
+#define PACKET_START       '$'          // 起始标志
+#define PACKET_END         '*'          // 结束标志
+
 #endif // __CONFIG_H__

@@ -26,4 +26,11 @@ void UART_SendChar(unsigned char ch);
  */
 void UART_SendString(unsigned char *str);
 
+/**
+ * @brief 发送安全数据包
+ * @param cmd 命令字符
+ * @note 格式: [$][ID_HIGH][ID_LOW][CMD][CHECKSUM][*]
+ */
+void UART_SendSecureCommand(unsigned char cmd);
+
 #endif // __UART_H__

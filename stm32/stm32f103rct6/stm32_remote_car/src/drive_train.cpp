@@ -217,7 +217,10 @@ void DriveTrain::applySpeedToMotors()
     int filteredTurn = applyDeadband(motionTurn_.getCurrent(), DEADBAND_THRESHOLD);
     
     // 应用转向灵敏度调整
-    int adjustedTurn = static_cast<int>(filteredTurn * TURN_SENSITIVITY);
+    // 使用可调灵敏度
+    // 先放大/翻转转向，再做小死区（1）
+    int adjustedTurn = static_cast<int>(filteredTurn * turn_sensitivity_);
+    if (std::abs(adjustedTurn) < 1) adjustedTurn = 0;
     
     // 检测是否为原地转向（直行速度接近0）
     bool isSpotTurn = (std::abs(filteredStraight) < 10);
@@ -227,6 +230,22 @@ void DriveTrain::applySpeedToMotors()
     // 右侧: 直行 - 转向
     int leftSpeed = filteredStraight + adjustedTurn;
     int rightSpeed = filteredStraight - adjustedTurn;
+
+    // 前进时为避免单侧停转：限制转向，使两侧至少保留 min_forward_floor_ 的前进分量
+    if (min_forward_floor_ > 0 && filteredStraight > 0 && adjustedTurn != 0) {
+        int maxTurn = filteredStraight - min_forward_floor_;
+        if (maxTurn < 0) maxTurn = 0;
+        if (adjustedTurn > maxTurn) adjustedTurn = maxTurn;
+        if (adjustedTurn < -maxTurn) adjustedTurn = -maxTurn;
+        leftSpeed  = filteredStraight + adjustedTurn;
+        rightSpeed = filteredStraight - adjustedTurn;
+    }
+    
+    // 应用最小前进速度底线（仅在前进且存在转向时）
+    if (min_forward_floor_ > 0 && filteredStraight > 0 && adjustedTurn != 0) {
+        if (leftSpeed > 0 && leftSpeed < min_forward_floor_) leftSpeed = min_forward_floor_;
+        if (rightSpeed > 0 && rightSpeed < min_forward_floor_) rightSpeed = min_forward_floor_;
+    }
     
     // 原地转向时降低速度，避免堵转和空转
     if (isSpotTurn && adjustedTurn != 0) {
@@ -283,4 +302,78 @@ void DriveTrain::setUpdateInterval(uint32_t intervalMs)
 {
     motionStraight_.setUpdateInterval(intervalMs);
     motionTurn_.setUpdateInterval(intervalMs);
+}
+
+/**
+ * @brief 立即驱动（无梯形速度轮廓）
+ */
+void DriveTrain::driveImmediate(int straightSpeed, int turnSpeed)
+{
+    if (!initialized_) {
+        return;
+    }
+
+    // 直接使用输入值，套用同样的混合与保护逻辑
+    int filteredStraight = applyDeadband(clampSpeed(straightSpeed), DEADBAND_THRESHOLD);
+    int filteredTurn = applyDeadband(clampSpeed(turnSpeed), DEADBAND_THRESHOLD);
+
+    int adjustedTurn = static_cast<int>(filteredTurn * turn_sensitivity_);
+    if (std::abs(adjustedTurn) < 1) adjustedTurn = 0;
+    bool isSpotTurn = (std::abs(filteredStraight) < 10);
+
+    int leftSpeed = filteredStraight + adjustedTurn;
+    int rightSpeed = filteredStraight - adjustedTurn;
+
+    if (min_forward_floor_ > 0 && filteredStraight > 0 && adjustedTurn != 0) {
+        int maxTurn = filteredStraight - min_forward_floor_;
+        if (maxTurn < 0) maxTurn = 0;
+        if (adjustedTurn > maxTurn) adjustedTurn = maxTurn;
+        if (adjustedTurn < -maxTurn) adjustedTurn = -maxTurn;
+        leftSpeed  = filteredStraight + adjustedTurn;
+        rightSpeed = filteredStraight - adjustedTurn;
+    }
+    
+    if (min_forward_floor_ > 0 && filteredStraight > 0 && adjustedTurn != 0) {
+        if (leftSpeed > 0 && leftSpeed < min_forward_floor_) leftSpeed = min_forward_floor_;
+        if (rightSpeed > 0 && rightSpeed < min_forward_floor_) rightSpeed = min_forward_floor_;
+    }
+
+    if (isSpotTurn && adjustedTurn != 0) {
+        leftSpeed = static_cast<int>(leftSpeed * SPOT_TURN_REDUCTION);
+        rightSpeed = static_cast<int>(rightSpeed * SPOT_TURN_REDUCTION);
+        if (leftSpeed != 0 && std::abs(leftSpeed) < MIN_SPOT_TURN_SPEED) {
+            leftSpeed = (leftSpeed > 0) ? MIN_SPOT_TURN_SPEED : -MIN_SPOT_TURN_SPEED;
+        }
+        if (rightSpeed != 0 && std::abs(rightSpeed) < MIN_SPOT_TURN_SPEED) {
+            rightSpeed = (rightSpeed > 0) ? MIN_SPOT_TURN_SPEED : -MIN_SPOT_TURN_SPEED;
+        }
+    }
+
+    normalizeSpeed(leftSpeed, rightSpeed);
+    leftSpeed = clampSpeed(leftSpeed);
+    rightSpeed = clampSpeed(rightSpeed);
+
+    // 反向修正与实际输出
+    leftSpeed = -leftSpeed;
+    rightSpeed = -rightSpeed;
+    leftFrontMotor_.setSpeed(leftSpeed);
+    leftBackMotor_.setSpeed(leftSpeed);
+    rightFrontMotor_.setSpeed(-rightSpeed);
+    rightBackMotor_.setSpeed(-rightSpeed);
+}
+
+// === 新增：参数设置接口 ===
+void DriveTrain::setTurnSensitivity(float sensitivity)
+{
+    // 允许负值以便快速翻转转向方向
+    if (sensitivity < -1.5f) sensitivity = -1.5f;
+    if (sensitivity >  1.5f) sensitivity =  1.5f;
+    turn_sensitivity_ = sensitivity;
+}
+
+void DriveTrain::setMinForwardFloor(int floor)
+{
+    if (floor < 0) floor = 0;
+    if (floor > MAX_SPEED) floor = MAX_SPEED;
+    min_forward_floor_ = floor;
 }

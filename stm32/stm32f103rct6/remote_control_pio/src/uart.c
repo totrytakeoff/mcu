@@ -61,3 +61,45 @@ void UART_SendString(unsigned char *str)
         str++;
     }
 }
+
+/**
+ * @brief 发送安全数据包
+ * @param cmd 命令字符
+ * 
+ * 数据包格式: [$][ID_HIGH][ID_LOW][CMD][CHECKSUM][*]
+ * 示例: $A5F3F57*
+ * 校验和 = ID_HIGH ^ ID_LOW ^ CMD
+ */
+void UART_SendSecureCommand(unsigned char cmd)
+{
+#if ENABLE_SECURITY
+    unsigned char checksum;
+    unsigned char id_high, id_low;
+    
+    // 提取设备ID的高低字节
+    id_high = (DEVICE_ID >> 8) & 0xFF;
+    id_low = DEVICE_ID & 0xFF;
+    
+    // 1. 发送起始标志
+    UART_SendChar(PACKET_START);
+    
+    // 2. 发送设备ID（高字节）
+    UART_SendChar(id_high);
+    
+    // 3. 发送设备ID（低字节）
+    UART_SendChar(id_low);
+    
+    // 4. 发送命令
+    UART_SendChar(cmd);
+    
+    // 5. 计算并发送校验和
+    checksum = id_high ^ id_low ^ cmd;
+    UART_SendChar(checksum);
+    
+    // 6. 发送结束标志
+    UART_SendChar(PACKET_END);
+#else
+    // 不安全模式：直接发送命令
+    UART_SendChar(cmd);
+#endif
+}
