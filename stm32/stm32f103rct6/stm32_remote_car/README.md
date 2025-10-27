@@ -3,6 +3,7 @@
 ## ⚠️ 重要警告 - 必读！
 
 **如果你的STM32 C++项目遇到以下问题：**
+
 - HAL_Delay() 卡死不返回
 - 定时器/PWM 不工作
 - 中断处理函数不被调用
@@ -38,15 +39,15 @@
 
 **📖 完整文档导航请查看：[INDEX.md](INDEX.md) - 按症状快速查找解决方案**
 
-| 文档 | 说明 | 重要程度 |
-|------|------|----------|
-| [INDEX.md](INDEX.md) | 📖 **文档索引 - 快速查找** | 🌟 推荐入口 |
-| [CRITICAL_CPP_LINKAGE_FIX.md](CRITICAL_CPP_LINKAGE_FIX.md) | ⚠️ **C++中断链接问题详解** | 🔥🔥🔥 必读 |
-| [CPP_INTERRUPT_CHECKLIST.md](CPP_INTERRUPT_CHECKLIST.md) | ⚡ 30秒快速检查清单 | 🔥🔥 推荐 |
-| [docs/BLUETOOTH_CONTROL_GUIDE.md](docs/BLUETOOTH_CONTROL_GUIDE.md) | 📱 **蓝牙控制完整指南** | 🔥🔥 推荐 |
-| [docs/LED_DEBUG_GUIDE.md](docs/LED_DEBUG_GUIDE.md) | 💡 LED调试指南 | 🔥 参考 |
-| [UPLOAD_CONFIG.md](UPLOAD_CONFIG.md) | 串口上传完整指南 | 🔥 参考 |
-| [MIGRATION_NOTES.md](MIGRATION_NOTES.md) | CMake→PIO迁移说明 | 🔥 参考 |
+| 文档                                                            | 说明                              | 重要程度    |
+| --------------------------------------------------------------- | --------------------------------- | ----------- |
+| [INDEX.md](INDEX.md)                                               | 📖**文档索引 - 快速查找**   | 🌟 推荐入口 |
+| [CRITICAL_CPP_LINKAGE_FIX.md](CRITICAL_CPP_LINKAGE_FIX.md)         | ⚠️**C++中断链接问题详解** | 🔥🔥🔥 必读 |
+| [CPP_INTERRUPT_CHECKLIST.md](CPP_INTERRUPT_CHECKLIST.md)           | ⚡ 30秒快速检查清单               | 🔥🔥 推荐   |
+| [docs/BLUETOOTH_CONTROL_GUIDE.md](docs/BLUETOOTH_CONTROL_GUIDE.md) | 📱**蓝牙控制完整指南**      | 🔥🔥 推荐   |
+| [docs/LED_DEBUG_GUIDE.md](docs/LED_DEBUG_GUIDE.md)                 | 💡 LED调试指南                    | 🔥 参考     |
+| [UPLOAD_CONFIG.md](UPLOAD_CONFIG.md)                               | 串口上传完整指南                  | 🔥 参考     |
+| [MIGRATION_NOTES.md](MIGRATION_NOTES.md)                           | CMake→PIO迁移说明                | 🔥 参考     |
 
 ---
 
@@ -81,18 +82,18 @@ stm32_pio/
 
 ### TIM3 PWM 输出引脚
 
-| 通道 | GPIO 引脚 | 功能 | 备注 |
-|------|----------|------|------|
-| TIM3_CH1 | PC6 | 电机 1 控制 | 与电机 3 同向 |
-| TIM3_CH2 | PC7 | 电机 2 控制 | 与电机 4 同向 |
-| TIM3_CH3 | PC8 | 电机 3 控制 | 与电机 1 同向 |
-| TIM3_CH4 | PC9 | 电机 4 控制 | 与电机 2 同向 |
+| 通道     | GPIO 引脚 | 功能        | 备注          |
+| -------- | --------- | ----------- | ------------- |
+| TIM3_CH1 | PC6       | 电机 1 控制 | 与电机 3 同向 |
+| TIM3_CH2 | PC7       | 电机 2 控制 | 与电机 4 同向 |
+| TIM3_CH3 | PC8       | 电机 3 控制 | 与电机 1 同向 |
+| TIM3_CH4 | PC9       | 电机 4 控制 | 与电机 2 同向 |
 
 ### PWM 信号参数
 
 - **频率**: 50Hz (20ms 周期)
 - **定时器时钟**: 1MHz (72MHz / 72 分频)
-- **脉宽范围**: 
+- **脉宽范围**:
   - 1250us: 全速倒转 (speed = -100)
   - 1500us: 停止 (speed = 0)
   - 1750us: 全速前进 (speed = 100)
@@ -104,6 +105,7 @@ stm32_pio/
 ### **1. 环境准备**
 
 确保已安装：
+
 - VSCode
 - PlatformIO 扩展
 
@@ -141,6 +143,7 @@ pio device monitor
 ```
 
 使用 VS Code：
+
 1. 打开 PlatformIO 侧边栏
 2. 点击 "Build" 编译
 3. 点击 "Upload" 上传
@@ -184,27 +187,27 @@ int main(void)
 {
     // 1. HAL 库初始化
     HAL_Init();
-    
+  
     // 2. 系统时钟配置
     SystemClock_Config();
-    
+  
     // 3. 外设初始化
     MX_GPIO_Init();
     MX_TIM3_Init();
-    
+  
     // 4. 启动 PWM
     HAL_TIM_PWM_Start(&htim3, TIM_CHANNEL_1);
     HAL_TIM_PWM_Start(&htim3, TIM_CHANNEL_2);
     HAL_TIM_PWM_Start(&htim3, TIM_CHANNEL_3);
     HAL_TIM_PWM_Start(&htim3, TIM_CHANNEL_4);
-    
+  
     // 5. 初始化电机
     Motor motor1, motor2, motor3, motor4;
     motor1.init(&htim3, TIM_CHANNEL_1);
     motor2.init(&htim3, TIM_CHANNEL_2);
     motor3.init(&htim3, TIM_CHANNEL_3);
     motor4.init(&htim3, TIM_CHANNEL_4);
-    
+  
     // 6. 控制循环
     while (1) {
         // 前进 2 秒
@@ -213,21 +216,21 @@ int main(void)
         motor2.setSpeed(-50);
         motor4.setSpeed(-50);
         HAL_Delay(2000);
-        
+      
         // 停止 1 秒
         motor1.stop();
         motor2.stop();
         motor3.stop();
         motor4.stop();
         HAL_Delay(1000);
-        
+      
         // 后退 2 秒
         motor1.setSpeed(-50);
         motor3.setSpeed(-50);
         motor2.setSpeed(50);
         motor4.setSpeed(50);
         HAL_Delay(2000);
-        
+      
         // 停止 1 秒
         motor1.stop();
         motor2.stop();
@@ -319,7 +322,7 @@ htim3.Init.Period = 10000;  // 1MHz / 10000 = 100Hz
 ```cpp
 void Motor::setSpeed(int speed) {
     if (!initialized_) return;
-    
+  
     // 自定义映射公式
     // 例如: 1000us ~ 2000us 范围
     int pulse = 1500 + speed * 5;
@@ -392,7 +395,7 @@ void Motor::smoothStop() {
 class MotorWithEncoder : public Motor {
 private:
     int encoderCount_;
-    
+  
 public:
     void updateEncoder();
     int getPosition();
@@ -407,7 +410,7 @@ class PIDController {
 private:
     float kp_, ki_, kd_;
     float error_, integral_, derivative_;
-    
+  
 public:
     float calculate(float setpoint, float measured);
 };
