@@ -120,6 +120,83 @@ upload_flags =
 
 ---
 
+### 🔥 功能模块文档
+
+#### 6. [09_pid_controller/README.md](09_pid_controller/README.md)
+**通用PID控制器完整指南**
+
+- **阅读时间：** 15-30分钟
+- **重要程度：** 🔥 HIGH
+- **适用场景：** 
+  - 电机速度控制
+  - 位置控制
+  - 巡线控制
+  - 温度控制
+  - 任何需要反馈控制的场景
+
+**内容：**
+- ✅ 完整的PID算法实现
+- ✅ 积分抗饱和（Anti-Windup）
+- ✅ 微分滤波（噪声抑制）
+- ✅ 详细的参数调节指南
+- ✅ 丰富的应用示例
+- ✅ 快速参考手册
+
+**快速开始：**
+```cpp
+#include "pid_controller.hpp"
+
+PIDController pid(1.0f, 0.1f, 0.05f);  // Kp, Ki, Kd
+pid.setOutputLimits(-100.0f, 100.0f);
+float output = pid.compute(setpoint, measured);
+```
+
+**相关文档：**
+- [PID_CONTROLLER_GUIDE.md](09_pid_controller/PID_CONTROLLER_GUIDE.md) - 完整指南
+- [PID_QUICK_REF.md](09_pid_controller/PID_QUICK_REF.md) - 快速参考
+- [pid_controller_example.cpp](../examples/pid_controller_example.cpp) - 示例代码
+
+---
+
+#### 7. [11_oled_display/README.md](11_oled_display/README.md)
+**OLED显示屏驱动（SSD1315）**
+
+- **阅读时间：** 10-20分钟
+- **重要程度：** 🔥 MEDIUM
+- **适用场景：** 
+  - 实时显示系统状态
+  - 调试信息可视化
+  - PID参数显示
+  - 无需串口的独立调试
+
+**内容：**
+- ✅ 0.96寸 OLED 驱动（128×64）
+- ✅ 基于u8g2库的完整封装
+- ✅ 文本、图形、进度条支持
+- ✅ 巡线车专用显示界面
+- ✅ 低资源占用（~10KB Flash）
+
+**快速开始：**
+```cpp
+#include "oled_display.hpp"
+
+OLEDDisplay oled;
+oled.init();
+oled.showDebugInfo("Running", 50, -12.5f, 2500);
+```
+
+**性能指标：**
+- Flash占用：~10KB（3.9%）
+- RAM占用：~1.5KB（3.1%）
+- 刷新时间：10-15ms（推荐10Hz）
+
+**相关文档：**
+- [OLED_DISPLAY_GUIDE.md](11_oled_display/OLED_DISPLAY_GUIDE.md) - 完整指南
+- [OLED_QUICK_REF.md](11_oled_display/OLED_QUICK_REF.md) - 快速参考
+- [oled_display_example.cpp](../examples/oled_display_example.cpp) - 示例代码
+
+---
+
 ## 🎯 按使用场景导航
 
 ### 场景1️⃣：初次使用本项目
@@ -149,6 +226,13 @@ upload_flags =
 1. [UPLOAD_CONFIG.md](UPLOAD_CONFIG.md) - 配置说明和故障排查
 2. 检查硬件连接（板子、USB线、Boot引脚）
 3. [README.md](README.md) - 检查硬件连接图
+
+### 场景5️⃣：实现PID控制
+
+**阅读顺序：**
+1. [09_pid_controller/PID_QUICK_REF.md](09_pid_controller/PID_QUICK_REF.md) - 快速上手
+2. [09_pid_controller/PID_CONTROLLER_GUIDE.md](09_pid_controller/PID_CONTROLLER_GUIDE.md) - 参数调节
+3. [pid_controller_example.cpp](../examples/pid_controller_example.cpp) - 查看示例
 
 ---
 
@@ -186,6 +270,30 @@ upload_flags =
 upload_protocol = stlink
 debug_tool = stlink
 ```
+
+### Q6: PID控制器震荡严重？
+**A:** 
+1. 减小Kp或增大Kd → [PID参数调节](09_pid_controller/PID_CONTROLLER_GUIDE.md#参数调节)
+2. 启用微分滤波 → [PID_QUICK_REF.md](09_pid_controller/PID_QUICK_REF.md#高级功能)
+
+### Q7: PID有稳态误差？
+**A:** 
+1. 添加小的Ki项（0.01-0.1）
+2. 确保启用抗饱和 → [PID完整指南](09_pid_controller/PID_CONTROLLER_GUIDE.md#积分抗饱和)
+
+### Q8: 需要电机速度/位置控制？
+**A:** 
+→ [PID控制器快速参考](09_pid_controller/PID_QUICK_REF.md#典型应用场景)
+
+### Q9: 如何实时查看调试信息（不用串口）？
+**A:** 
+→ [OLED显示屏快速参考](11_oled_display/OLED_QUICK_REF.md)
+
+### Q10: OLED屏幕无显示？
+**A:** 
+1. 检查接线（VCC→3.3V, GND→GND, SCL→PB10, SDA→PB11）
+2. 检查I2C地址（0x3C）→ [OLED故障排查](11_oled_display/OLED_DISPLAY_GUIDE.md#常见问题)
+3. 确保调用了`show()`方法
 
 ---
 

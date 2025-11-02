@@ -12,19 +12,20 @@
  * @brief 构造函数
  */
 Button::Button(GPIO_TypeDef* port, uint16_t pin, ButtonMode mode, uint32_t debounce_ms)
-    : port_(port),
-      pin_(pin),
-      mode_(mode),
-      debounce_time_(debounce_ms),
-      last_state_(false),
-      current_state_(false),
-      last_change_time_(0),
-      press_start_time_(0),
-      press_triggered_(false),
-      release_triggered_(false),
-      initialized_(false),
-      prev_state_for_release_(false),
-      prev_state_for_longpress_(false) {
+        : port_(port)
+        , pin_(pin)
+        , mode_(mode)
+        , debounce_time_(debounce_ms)
+        , last_state_(false)
+        , current_state_(false)
+        , last_change_time_(0)
+        , press_start_time_(0)
+        , press_triggered_(false)
+        , release_triggered_(false)
+        , initialized_(false)
+        , prev_state_for_release_(false)
+        , prev_state_for_longpress_(false) {
+    init();
 }
 
 /**
@@ -32,29 +33,29 @@ Button::Button(GPIO_TypeDef* port, uint16_t pin, ButtonMode mode, uint32_t debou
  */
 void Button::init() {
     GPIO_InitTypeDef GPIO_InitStruct = {0};
-    
+
     // 使能GPIO时钟
     enablePortClock();
-    
+
     // 配置GPIO引脚
     GPIO_InitStruct.Pin = pin_;
     GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
     GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-    
+
     // 根据模式设置上拉/下拉
     if (mode_ == ButtonMode::PULL_UP) {
         GPIO_InitStruct.Pull = GPIO_PULLUP;
     } else {
         GPIO_InitStruct.Pull = GPIO_PULLDOWN;
     }
-    
+
     HAL_GPIO_Init(port_, &GPIO_InitStruct);
-    
+
     // 初始化状态
     last_state_ = read();
     current_state_ = last_state_;
     last_change_time_ = HAL_GetTick();
-    
+
     initialized_ = true;
 }
 
@@ -78,16 +79,14 @@ void Button::enablePortClock() {
 /**
  * @brief 读取按钮原始电平
  */
-GPIO_PinState Button::readRaw() const {
-    return HAL_GPIO_ReadPin(port_, pin_);
-}
+GPIO_PinState Button::readRaw() const { return HAL_GPIO_ReadPin(port_, pin_); }
 
 /**
  * @brief 读取按钮逻辑状态
  */
 bool Button::read() const {
     GPIO_PinState pin_state = readRaw();
-    
+
     // 根据模式返回逻辑状态
     if (mode_ == ButtonMode::PULL_UP) {
         // 上拉模式：按下为低电平
@@ -105,16 +104,16 @@ void Button::update() {
     if (!initialized_) {
         return;
     }
-    
+
     bool new_state = read();
     uint32_t current_time = HAL_GetTick();
-    
+
     // 状态改变
     if (new_state != last_state_) {
         last_change_time_ = current_time;
         last_state_ = new_state;
     }
-    
+
     // 防抖：状态稳定超过防抖时间
     if ((current_time - last_change_time_) >= debounce_time_) {
         current_state_ = new_state;
@@ -126,7 +125,7 @@ void Button::update() {
  */
 bool Button::isPressed() {
     update();
-    
+
     // 检测从未按下到按下的边沿
     if (current_state_ && !press_triggered_) {
         press_triggered_ = true;
@@ -134,12 +133,12 @@ bool Button::isPressed() {
         press_start_time_ = HAL_GetTick();
         return true;
     }
-    
+
     // 按钮释放后重置触发标志
     if (!current_state_) {
         press_triggered_ = false;
     }
-    
+
     return false;
 }
 
@@ -148,17 +147,17 @@ bool Button::isPressed() {
  */
 bool Button::isReleased() {
     update();
-    
+
     // 检测从按下到释放的边沿（下降沿）
     bool released = (prev_state_for_release_ && !current_state_);
     prev_state_for_release_ = current_state_;
-    
+
     if (released) {
         release_triggered_ = true;
         press_triggered_ = false;
         return true;
     }
-    
+
     return false;
 }
 
@@ -167,17 +166,17 @@ bool Button::isReleased() {
  */
 bool Button::isLongPressed(uint32_t long_press_ms) {
     update();
-    
+
     uint32_t current_time = HAL_GetTick();
-    
+
     // 检测按下的上升沿（使用防抖后的状态）
     if (current_state_ && !prev_state_for_longpress_) {
         press_start_time_ = current_time;
     }
-    
+
     // 更新上一次状态
     prev_state_for_longpress_ = current_state_;
-    
+
     // 如果按钮当前按下，检查持续时间
     if (current_state_) {
         if (press_start_time_ > 0) {
@@ -192,7 +191,7 @@ bool Button::isLongPressed(uint32_t long_press_ms) {
             press_start_time_ = 0;
         }
     }
-    
+
     return false;
 }
 
@@ -211,15 +210,15 @@ uint32_t Button::getPressedDuration() const {
  */
 void Button::reset() {
     update();  // 先更新一次状态
-    
+
     press_triggered_ = false;
     release_triggered_ = false;
     press_start_time_ = 0;
-    
+
     // 重置边沿检测状态，避免误触发
     prev_state_for_release_ = current_state_;
     prev_state_for_longpress_ = current_state_;
-    
+
     // 如果当前按钮是按下状态，设置press_triggered_为true
     // 这样可以避免下次调用isPressed()时误认为是新的按下边沿
     if (current_state_) {
@@ -230,6 +229,4 @@ void Button::reset() {
 /**
  * @brief 设置防抖时间
  */
-void Button::setDebounceTime(uint32_t debounce_ms) {
-    debounce_time_ = debounce_ms;
-}
+void Button::setDebounceTime(uint32_t debounce_ms) { debounce_time_ = debounce_ms; }

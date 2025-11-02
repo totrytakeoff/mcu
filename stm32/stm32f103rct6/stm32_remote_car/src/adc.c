@@ -176,10 +176,14 @@ void ADC_ReadAll(uint16_t *buffer)
 {
     // 启动 DMA 转换
     HAL_ADC_Start_DMA(&hadc1, (uint32_t*)buffer, 8);
-    
-    // 等待转换完成（8通道约64us）
-    HAL_Delay(1);
-    
+
+    // 等待转换完成（使用忙等待，避免1ms阻塞延迟）
+    // 8通道DMA转换实际只需要约64us，使用微秒级等待
+    volatile uint32_t timeout = 1000;  // 1000次循环，约100us
+    while (timeout-- && !__HAL_ADC_GET_FLAG(&hadc1, ADC_FLAG_EOC)) {
+        // 忙等待转换完成标志
+    }
+
     // 停止 DMA
     HAL_ADC_Stop_DMA(&hadc1);
 }
